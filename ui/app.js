@@ -108,9 +108,39 @@ async function pollLiveTelemetry() {
   }
 }
 
+// Web Audio API gentle sound chime for non-intrusive awareness
+let audioCtx = null;
+function playGentleChime(freq = 528, duration = 1.0) {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.25, audioCtx.currentTime + 0.15);
+    
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  } catch (e) {
+    // Non-critical audio
+  }
+}
+
 function updateSessionUI(session, intent) {
   const onboarding = document.getElementById("intentOnboardingCard");
   const activeCard = document.getElementById("activeFocusCard");
+  const completedCard = document.getElementById("sessionCompletedCard");
+  const lockCard = document.getElementById("focusLockCard");
   const timerDisplay = document.getElementById("sessionTimerDisplay");
   const goalHeading = document.getElementById("activeGoalHeading");
   const catLabel = document.getElementById("intentCategoryLabel");
@@ -118,11 +148,26 @@ function updateSessionUI(session, intent) {
   if (!session || session.status === "IDLE") {
     onboarding.style.display = "block";
     activeCard.style.display = "none";
+    if (completedCard) completedCard.style.display = "none";
+    if (lockCard) lockCard.style.display = "none";
     return;
   }
 
+  if (session.status === "COMPLETED") {
+    onboarding.style.display = "none";
+    activeCard.style.display = "none";
+    if (lockCard) lockCard.style.display = "none";
+    if (completedCard) {
+      completedCard.style.display = "block";
+      document.getElementById("completedGoalDisplay").textContent = intent?.goal_text || "Goal Session";
+    }
+    return;
+  }
+
+  // Active Session
   onboarding.style.display = "none";
   activeCard.style.display = "block";
+  if (completedCard) completedCard.style.display = "none";
 
   if (intent) {
     goalHeading.textContent = intent.goal_text || "Focus Session";
@@ -134,6 +179,28 @@ function updateSessionUI(session, intent) {
   const m = Math.floor(rem / 60).toString().padStart(2, "0");
   const s = (rem % 60).toString().padStart(2, "0");
   timerDisplay.textContent = `${m}:${s}`;
+
+  // Focus Lock handling
+  if (lockCard) {
+    if (session.is_focus_locked) {
+      lockCard.style.display = "block";
+    } else {
+      lockCard.style.display = "none";
+    }
+  }
+}
+
+function resetToNewSession() {
+  stopFocusSession();
+  const completedCard = document.getElementById("sessionCompletedCard");
+  if (completedCard) completedCard.style.display = "none";
+}
+
+async function clearFocusLock() {
+  await handleInterventionAction("int_lock_clear", "RETURN_TO_GOAL");
+  const lockCard = document.getElementById("focusLockCard");
+  if (lockCard) lockCard.style.display = "none";
+  pollLiveTelemetry();
 }
 
 function updateCurrentActivityUI(activity, drift) {
@@ -226,8 +293,14 @@ function updateInterventionPromptUI(rec, activePrompt) {
     return;
   }
 
+  const isNewPrompt = (currentInterventionId !== (prompt.intervention_id || "int_live"));
   container.style.display = "block";
   currentInterventionId = prompt.intervention_id || "int_live";
+  
+  if (isNewPrompt && prompt.tier_level >= 2) {
+    playGentleChime(prompt.tier_level === 3 ? 660 : 528, 0.8);
+  }
+
   headlineEl.textContent = prompt.headline || "Attention Drift Detected";
   msgEl.textContent = prompt.message || "Activity is diverging from your focus goal.";
   rationaleEl.textContent = prompt.rationale ? `Rationale: ${prompt.rationale}` : "";

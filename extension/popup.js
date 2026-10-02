@@ -1,85 +1,100 @@
-const SERVER_PORTS = [8000, 8765, 8080];
-let activeServerUrl = "http://127.0.0.1:8000";
+/**
+ * Focus Guard 2.0 - Extension Popup Controller
+ * Connects directly to http://127.0.0.1:8000/api/v2/telemetry/live
+ */
 
-async function fetchFromAnyServer(path, options = {}) {
+const SERVER_URL = "http://127.0.0.1:8000";
+
+async function fetchStatus() {
+  const connEl = document.getElementById("conn-indicator");
+  const sessEl = document.getElementById("session-status");
+  const riskEl = document.getElementById("risk-score");
+  const driftEl = document.getElementById("drift-state");
+  const goalEl = document.getElementById("goal-text");
+
   try {
-    const res = await fetch(`${activeServerUrl}${path}`, options);
-    if (res.ok) return res;
-  } catch {}
-
-  for (const port of SERVER_PORTS) {
-    const url = `http://127.0.0.1:${port}`;
-    if (url === activeServerUrl) continue;
-    try {
-      const res = await fetch(`${url}${path}`, options);
-      if (res.ok) {
-        activeServerUrl = url;
-        return res;
-      }
-    } catch {}
-  }
-  return null;
-}
-
-async function checkStatus() {
-  const statusEl = document.getElementById("goal-status");
-  const res = await fetchFromAnyServer("/api/goal/status");
-  if (res && res.ok) {
+    const res = await fetch(`${SERVER_URL}/api/v2/telemetry/live`);
+    if (!res.ok) throw new Error("Offline");
     const data = await res.json();
-    if (data.is_paused) {
-      statusEl.textContent = `⏸️ Goal Paused (${data.remaining_seconds}s remaining)`;
-      statusEl.style.color = "#fbbf24";
-    } else if (data.active) {
-      statusEl.textContent = `🎯 Goal: ${data.topic || data.text || "Active"}`;
-      statusEl.style.color = "#4ade80";
+
+    connEl.textContent = "Online";
+    connEl.style.color = "#10b981";
+
+    // Intent
+    if (data.intent) {
+      goalEl.textContent = `${data.intent.category_label || "Goal"}: "${data.intent.goal_text}"`;
     } else {
-      statusEl.textContent = "🎯 Goal Active (Interventions armed)";
-      statusEl.style.color = "#4ade80";
+      goalEl.textContent = "No active intention declared.";
     }
-  } else {
-    statusEl.textContent = "FocusGuard Server Offline (Standalone mode)";
-    statusEl.style.color = "#94a3b8";
+
+    // Session status
+    const status = data.session?.status || "IDLE";
+    sessEl.textContent = status;
+    if (status === "ACTIVE") {
+      sessEl.className = "val val-good";
+    } else if (status === "RESET_ACTIVITY") {
+      sessEl.className = "val val-warn";
+      sessEl.textContent = "BREATH RESET";
+    } else {
+      sessEl.className = "val";
+    }
+
+    // Risk
+    const rScore = data.risk?.score || 0;
+    const rLvl = data.risk?.level || 0;
+    riskEl.textContent = `${rScore}% (Level ${rLvl})`;
+    if (rScore < 25) {
+      riskEl.className = "val val-good";
+    } else if (rScore < 75) {
+      riskEl.className = "val val-warn";
+    } else {
+      riskEl.className = "val val-urgent";
+    }
+
+    // Drift state
+    const dState = data.drift?.drift_state || "NOMINAL";
+    driftEl.textContent = dState.replace("_", " ");
+    if (dState === "NOMINAL") {
+      driftEl.className = "val val-good";
+    } else if (dState === "MILD_DRIFT") {
+      driftEl.className = "val val-warn";
+    } else {
+      driftEl.className = "val val-urgent";
+    }
+
+  } catch (err) {
+    connEl.textContent = "Server Offline";
+    connEl.style.color = "#94a3b8";
+    goalEl.textContent = "Ensure 'python ui/server.py 8000' is running.";
   }
 }
 
-document.getElementById("clear-all-actions-btn")?.addEventListener("click", async () => {
-  const statusEl = document.getElementById("goal-status");
-  if (statusEl) {
-    statusEl.textContent = "🧹 Clearing all actions & locks...";
-    statusEl.style.color = "#f87171";
-  }
-
-  // 1. Notify backend servers to clear cooldowns and resume
-  await fetchFromAnyServer("/api/cooldown/clear", { method: "POST" }).catch(() => {});
-  await fetchFromAnyServer("/api/goal/resume", { method: "POST" }).catch(() => {});
-
-  // 2. Broadcast CLEAR_EVERY_ACTION to all tabs via background relay
+document.getElementById("breath-reset-btn")?.addEventListener("click", async () => {
   try {
-    chrome.runtime.sendMessage({ action: "CLEAR_EVERY_ACTION" }, () => {
-      if (chrome.runtime.lastError) {}
+    await fetch(`${SERVER_URL}/api/v2/intervention/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intervention_id: "int_popup", action_id: "BREATH_RESET" })
     });
-  } catch (e) {}
-
-  setTimeout(() => {
-    if (statusEl) {
-      statusEl.textContent = "✨ All actions & restrictions cleared!";
-      statusEl.style.color = "#38bdf8";
-    }
-  }, 400);
+    fetchStatus();
+    chrome.tabs.create({ url: `${SERVER_URL}` });
+  } catch {}
 });
 
-document.getElementById("pause-goal-btn").addEventListener("click", async () => {
-  await fetchFromAnyServer("/api/goal/pause", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ minutes: 5 })
-  });
-  checkStatus();
+document.getElementById("pause-break-btn")?.addEventListener("click", async () => {
+  try {
+    await fetch(`${SERVER_URL}/api/v2/intervention/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intervention_id: "int_popup", action_id: "SHORT_BREAK" })
+    });
+    fetchStatus();
+  } catch {}
 });
 
-document.getElementById("open-dashboard-btn").addEventListener("click", () => {
-  chrome.tabs.create({ url: `${activeServerUrl}` });
+document.getElementById("open-dashboard-btn")?.addEventListener("click", () => {
+  chrome.tabs.create({ url: `${SERVER_URL}` });
 });
 
-checkStatus();
-setInterval(checkStatus, 1500);
+fetchStatus();
+setInterval(fetchStatus, 2000);

@@ -1,90 +1,132 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>FocusGuard</title>
+  <title>Focus Guard 2.0</title>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     body {
-      width: 280px;
-      margin: 0;
+      width: 300px;
       padding: 16px;
-      background: #0f172a;
+      background: #090d16;
       color: #f8fafc;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     .header {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 14px;
-      border-bottom: 1px solid #1e293b;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       padding-bottom: 10px;
     }
-    .title {
-      font-size: 15px;
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       font-weight: 700;
-      color: #38bdf8;
+      font-size: 14px;
+      color: #fff;
+    }
+    .pill {
+      font-size: 10px;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      padding: 2px 6px;
+      border-radius: 9999px;
+      font-weight: 600;
     }
     .status-card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
       padding: 12px;
       font-size: 12px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
+    }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .label { color: #94a3b8; }
+    .val { font-weight: 600; }
+    .val-good { color: #10b981; }
+    .val-warn { color: #f59e0b; }
+    .val-urgent { color: #f43f5e; }
+    .goal-box {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 11px;
+      color: #cbd5e1;
+      line-height: 1.4;
     }
     .btn {
       width: 100%;
-      padding: 10px;
-      border-radius: 10px;
-      border: none;
-      font-size: 13px;
-      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-size: 12px;
+      font-weight: 600;
       cursor: pointer;
       margin-bottom: 8px;
-      transition: all 0.2s;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
-    .btn-pause {
-      background: rgba(245, 158, 11, 0.2);
-      border: 1px solid rgba(245, 158, 11, 0.5);
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: #ffffff;
+      border-color: #6366f1;
+    }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-reset {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+    }
+    .btn-reset:hover { background: rgba(56, 189, 248, 0.25); }
+    .btn-break {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.3);
       color: #fbbf24;
     }
-    .btn-pause:hover {
-      background: rgba(245, 158, 11, 0.3);
-    }
-    .btn-dashboard {
-      background: #0284c7;
-      color: #ffffff;
-    }
-    .btn-dashboard:hover {
-      background: #0369a1;
-    }
-    .btn-clear {
-      background: rgba(239, 68, 68, 0.18);
-      border: 1px solid rgba(239, 68, 68, 0.45);
-      color: #fca5a5;
-    }
-    .btn-clear:hover {
-      background: rgba(239, 68, 68, 0.35);
-      color: #ffffff;
-    }
+    .btn-break:hover { background: rgba(245, 158, 11, 0.25); }
   </style>
 </head>
 <body>
   <div class="header">
-    <span style="font-size: 20px;">🛡️</span>
-    <span class="title">FocusGuard Shield</span>
+    <div class="brand">
+      <span>Focus Guard</span>
+      <span class="pill">2.0</span>
+    </div>
+    <span id="conn-indicator" style="font-size: 10px; color: #10b981;">Online</span>
   </div>
 
   <div class="status-card">
-    <div style="color: #94a3b8; margin-bottom: 4px;">DOM Tab Blocker:</div>
-    <div style="font-weight: 700; color: #4ade80;">Active (4s / 7s / 10s HUD)</div>
-    <div id="goal-status" style="margin-top: 6px; font-size: 11px; color: #cbd5e1;">Syncing with FocusGuard daemon...</div>
+    <div class="status-row">
+      <span class="label">Session:</span>
+      <span id="session-status" class="val val-good">FLOW STATE</span>
+    </div>
+    <div class="status-row">
+      <span class="label">Distraction Risk:</span>
+      <span id="risk-score" class="val val-good">0% (Level 0)</span>
+    </div>
+    <div class="status-row">
+      <span class="label">Drift State:</span>
+      <span id="drift-state" class="val val-good">Nominal</span>
+    </div>
+    <div class="goal-box">
+      <strong style="color: #a5b4fc;">Declared Intent:</strong>
+      <div id="goal-text">Syncing with Focus Guard 2.0...</div>
+    </div>
   </div>
 
-  <button id="clear-all-actions-btn" class="btn btn-clear">🧹 Clear Every Action (Reset All)</button>
-  <button id="pause-goal-btn" class="btn btn-pause">⏸️ Pause Goal (5m Break)</button>
-  <button id="open-dashboard-btn" class="btn btn-dashboard">Open FocusGuard Dashboard</button>
+  <button id="breath-reset-btn" class="btn btn-reset">Take 3-Min Breath Reset</button>
+  <button id="pause-break-btn" class="btn btn-break">Take 5-Min Break</button>
+  <button id="open-dashboard-btn" class="btn btn-primary">Open 2.0 Web Dashboard</button>
 
   <script src="popup.js"></script>
 </body>

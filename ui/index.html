@@ -147,6 +147,54 @@
         </div>
       </div>
 
+      <!-- State C: Session Completed Card -->
+      <div id="sessionCompletedCard" class="focus-hero-card flow-glow" style="display: none; text-align: center;">
+        <div style="max-width: 500px; margin: 0 auto;">
+          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎉</div>
+          <h2 class="intent-headline" style="color: #10b981;">Focus Session Completed!</h2>
+          <p id="completedSummaryText" class="intent-subtext" style="margin: 0.5rem auto 1.5rem;">You completed 25 minutes of deep attention protection for your declared goal.</p>
+          <div class="dashboard-grid" style="margin-bottom: 1.5rem;">
+            <div class="stat-card" style="padding: 0.8rem; text-align: center;">
+              <span class="stat-title">COMPLETED INTENT</span>
+              <div id="completedGoalDisplay" style="font-weight: 700; font-size: 0.95rem; margin-top: 0.3rem;">Study DSA</div>
+            </div>
+            <div class="stat-card" style="padding: 0.8rem; text-align: center;">
+              <span class="stat-title">RECOVERY STATUS</span>
+              <div style="font-weight: 700; font-size: 0.95rem; color: #10b981; margin-top: 0.3rem;">Flow Preserved</div>
+            </div>
+          </div>
+          <button class="btn-start-focus" onclick="resetToNewSession()">
+            <span>Start Another Focus Session</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- State D: Level 4 Focus Lock Shield Card -->
+      <div id="focusLockCard" class="focus-hero-card urgent-glow" style="display: none; border-color: rgba(244, 63, 94, 0.5); background: linear-gradient(135deg, rgba(76, 5, 25, 0.4), rgba(17, 24, 39, 0.8));">
+        <div class="hero-grid">
+          <div>
+            <div class="intent-eyebrow">
+              <span class="stat-badge urgent">LEVEL 4 — RESTRICTION ACTIVE</span>
+              <span style="color: #fca5a5;">Escalated Protection</span>
+            </div>
+            <h2 class="intent-headline" style="color: #f43f5e;">Focus Lock Engaged</h2>
+            <p class="intent-subtext" style="color: #fecdd3;">Distracting social feeds, algorithmic video reels, and non-essential applications are temporarily restricted to help you regain control.</p>
+            <div style="margin-top: 1rem; display: flex; gap: 0.6rem;">
+              <button class="btn-action" style="background: rgba(244, 63, 94, 0.2); border-color: #f43f5e; color: #fff;" onclick="openBreathReset()">
+                <span>Take 3-Min Reset to Unlock Early</span>
+              </button>
+              <button class="btn-action" style="font-size: 0.75rem;" onclick="clearFocusLock()">
+                <span>Emergency Unlock</span>
+              </button>
+            </div>
+          </div>
+          <div class="timer-container">
+            <div id="focusLockTimer" class="timer-digits" style="color: #f43f5e;">20:00</div>
+            <span class="timer-label" style="color: #fca5a5;">LOCK DURATION REMAINING</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Active AI Recommendation / Adaptive Intervention Card -->
       <div id="interventionCardContainer" style="margin-top: 1.5rem; display: none;">
         <div class="intervention-card">

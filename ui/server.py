@@ -422,10 +422,12 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
             intent = active_session.get("intent")
             score, classification, reason = evaluate_activity_against_intent(intent, app_name, window_title, url)
 
+            is_productive = (classification == "ALIGNED")
             return self._send_json(200, {
                 "success": True,
-                "classification": classification,
-                "relevant": classification == "ALIGNED",
+                "classification": "PRODUCTIVE" if is_productive else classification,
+                "focusguard_2_classification": classification,
+                "relevant": is_productive,
                 "alignment_score": score,
                 "reason": reason,
                 "recorded": recorded

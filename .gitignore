@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+.venv/
+venv/
+
+# FocusGuard Local Session State & Logs
+data/active_session.json
+*.log
+scratch/
+tools/models/
+tools/face_template.enc
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

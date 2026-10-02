@@ -1,0 +1,35 @@
+[
+  {
+    "intervention_id": "int_demo_1",
+    "user_id": "user_1",
+    "intent_id": "a542f0e5",
+    "timestamp": 1790928897.4753106,
+    "time_iso": "2026-10-02T08:14:57Z",
+    "tier_level": 2,
+    "risk_score": 60,
+    "headline": "Drifting from Goal",
+    "rationale": "Sustained distraction observed; proactive suggestion offered before restricting.",
+    "action_chosen": "BREATH_RESET",
+    "response_status": "ACCEPTED",
+    "verify_at": 1790929077.4753106,
+    "recovery_outcome": "SUCCESSFUL_RECOVERY",
+    "responded_at": 1790928897.4941761,
+    "verified_at": 1790929099.4262748
+  },
+  {
+    "intervention_id": "int_1790929112_1",
+    "user_id": "default_user",
+    "intent_id": "b4509df9",
+    "timestamp": 1790929112.0900779,
+    "time_iso": "2026-10-02T08:18:32Z",
+    "tier_level": 1,
+    "risk_score": 30,
+    "headline": "Attention Nudge",
+    "rationale": "Early drift detected (under 90s); gentle awareness prompt.",
+    "action_chosen": "NONE",
+    "response_status": "PENDING_USER_RESPONSE",
+    "verify_at": 1790929292.0900779,
+    "recovery_outcome": "DRIFT_PERSISTED",
+    "verified_at": 1790929350.5989473
+  }
+]

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Focus Guard 2.0 — Adaptive Digital Wellbeing & Attention Drift Engine</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <a href="#" class="brand" onclick="switchTab('focus'); return false;">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </div>
+        <div class="brand-title">
+          <span>Focus Guard</span>
+          <span class="version-pill">2.0</span>
+        </div>
+      </a>
+
+      <!-- Primary Navigation -->
+      <nav class="nav-links">
+        <button id="nav-btn-focus" class="nav-btn active" onclick="switchTab('focus')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Focus Session</span>
+        </button>
+        <button id="nav-btn-drift" class="nav-btn" onclick="switchTab('drift')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span>Attention Drift</span>
+        </button>
+        <button id="nav-btn-insights" class="nav-btn" onclick="switchTab('insights')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          <span>Insights</span>
+        </button>
+      </nav>
+
+      <!-- Status Indicators -->
+      <div class="header-status-group">
+        <div id="telemetryBadge" class="telemetry-badge" title="Live telemetry source">
+          <span id="telemetryDot" class="dot-indicator"></span>
+          <span id="telemetrySourceText">LIVE WIN32</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Interactive 60-Second Judge Demo Controller -->
+  <section class="demo-banner">
+    <div class="demo-title-group">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <strong>Judge Demo Simulator:</strong>
+      <span style="color: var(--text-secondary); font-size: 0.75rem;">(Demonstrates canonical Attention Drift & AI intervention arc)</span>
+    </div>
+    <div class="demo-steps-group">
+      <button class="demo-step-btn" onclick="triggerSimulatorStep(1)">1. Study Lecture (Aligned)</button>
+      <button class="demo-step-btn" onclick="triggerSimulatorStep(2)">2. LeetCode / IDE (Aligned)</button>
+      <button class="demo-step-btn" onclick="triggerSimulatorStep(3)">3. YouTube Shorts (Mild Drift)</button>
+      <button class="demo-step-btn" onclick="triggerSimulatorStep(4)">4. Instagram Reels (Moderate Drift)</button>
+      <button class="demo-step-btn" onclick="triggerSimulatorStep(5)">5. Repeated Diversion (Acute)</button>
+      <button class="demo-auto-btn" onclick="runAutoJudgeDemo()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span>Run 60s Demo Arc</span>
+      </button>
+      <button class="demo-step-btn" style="color: #f87171;" onclick="resetSimulator()" title="Return to real hardware window monitoring">↺ Reset to Hardware</button>
+    </div>
+  </section>
+
+  <!-- Main Content Shell -->
+  <main class="app-main">
+
+    <!-- TAB 1: FOCUS SESSION -->
+    <div id="tab-focus" class="tab-pane active">
+
+      <!-- State A: Intent Onboarding Card (shown when session is IDLE) -->
+      <div id="intentOnboardingCard" class="focus-hero-card">
+        <div class="intent-eyebrow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+          <span>Step 1 — Declare Intention</span>
+        </div>
+        <h1 class="intent-headline">What are you intending to accomplish?</h1>
+        <p class="intent-subtext">Focus Guard 2.0 uses your intention as the contextual benchmark. Educational content stays permitted, while algorithmic rabbit holes are gently guided back.</p>
+
+        <!-- Preset Categories -->
+        <div class="category-pill-grid">
+          <div class="category-pill active" onclick="selectCategory('study', this)">Study / Academics</div>
+          <div class="category-pill" onclick="selectCategory('coding', this)">Software / Coding</div>
+          <div class="category-pill" onclick="selectCategory('work', this)">Deep Work</div>
+          <div class="category-pill" onclick="selectCategory('writing', this)">Writing / Thesis</div>
+          <div class="category-pill" onclick="selectCategory('communication', this)">Quick Task</div>
+          <div class="category-pill" onclick="selectCategory('custom', this)">Custom Goal</div>
+        </div>
+
+        <div style="margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.75rem;">
+          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">Custom Goal Description</label>
+          <input type="text" id="goalTextInput" class="input-text" placeholder="e.g., Prepare for my Data Structures exam" value="Prepare for my Data Structures exam">
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <label style="font-size: 0.8rem; color: var(--text-muted);">Session Duration:</label>
+            <select id="durationSelect" class="input-text" style="width: auto; padding: 0.5rem 1rem;">
+              <option value="15">15 minutes</option>
+              <option value="25" selected>25 minutes (Pomodoro)</option>
+              <option value="45">45 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </div>
+          <button class="btn-start-focus" onclick="startFocusSession()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>Begin Focus Session</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- State B: Active Focus Hero (shown when session is ACTIVE) -->
+      <div id="activeFocusCard" class="focus-hero-card flow-glow" style="display: none;">
+        <div class="hero-grid">
+          <div>
+            <div class="intent-eyebrow">
+              <span id="sessionStatusBadge" class="stat-badge good">FLOW STATE</span>
+              <span id="intentCategoryLabel" style="color: var(--text-muted);">Study / Academics</span>
+            </div>
+            <h2 id="activeGoalHeading" class="intent-headline">Prepare for my Data Structures exam</h2>
+            <p id="activeActivityDesc" class="intent-subtext">Active: Striver DSA Trees Lecture — Aligned with study goal.</p>
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+              <button class="btn-action" style="font-size: 0.75rem; padding: 0.35rem 0.8rem;" onclick="stopFocusSession()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                <span>End Session</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="timer-container">
+            <div id="sessionTimerDisplay" class="timer-digits">24:58</div>
+            <span class="timer-label">SESSION TIME REMAINING</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active AI Recommendation / Adaptive Intervention Card -->
+      <div id="interventionCardContainer" style="margin-top: 1.5rem; display: none;">
+        <div class="intervention-card">
+          <div class="intervention-header">
+            <div class="intervention-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>
+              <span id="interventionBadgeText">AI Contextual Recommendation</span>
+            </div>
+            <span id="interventionEngineTag" style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">HYBRID GROQ ENGINE</span>
+          </div>
+
+          <div>
+            <h3 id="interventionHeadline" class="intervention-headline">Drifting from Goal</h3>
+            <p id="interventionMessage" class="intervention-message">You've spent 4 minutes on YouTube Shorts during your study session. A quick reset may help you regain focus.</p>
+            <p id="interventionRationale" class="intervention-rationale">Rationale: Observed short-form video diverges from active study intent.</p>
+          </div>
+
+          <!-- Dynamic Action Buttons -->
+          <div id="interventionActionsContainer" class="intervention-actions">
+            <!-- Populated dynamically via app.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Summary below Focus Hero -->
+      <div class="dashboard-grid" style="margin-top: 1.5rem;">
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-title">CURRENT ACTIVITY</span>
+            <span id="currentStatusBadge" class="stat-badge good">ALIGNED</span>
+          </div>
+          <div id="currentAppName" class="stat-value" style="font-size: 1.3rem;">VS Code</div>
+          <p id="currentWindowTitle" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Striver DSA Lecture</p>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-title">DISTRACTION RISK</span>
+            <span id="riskLevelBadge" class="stat-badge good">0% LEVEL 0</span>
+          </div>
+          <div id="riskScoreDisplay" class="stat-value">0%</div>
+          <div class="risk-progress-bar">
+            <div id="riskProgressBarFill" class="risk-progress-fill" style="width: 0%; background: var(--color-flow);"></div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-title">APP SWITCHES (5M)</span>
+            <span id="switchesBadge" class="stat-badge info">STABLE</span>
+          </div>
+          <div id="switchesDisplay" class="stat-value">0</div>
+          <p id="switchesNote" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">Context switching frequency</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 2: ATTENTION DRIFT & RISK SCORER -->
+    <div id="tab-drift" class="tab-pane">
+      <div class="focus-hero-card">
+        <div class="intent-eyebrow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span>Attention Drift Engine & Risk Breakdown</span>
+        </div>
+        <h2 class="intent-headline">Explainable Attention Drift Diagnostics</h2>
+        <p class="intent-subtext">Focus Guard 2.0 rejects arbitrary black-box scores. Every point is fully explained by duration, intent divergence, switching thrashing, and recovery credit.</p>
+
+        <!-- Trajectory Narrative -->
+        <div style="margin-top: 1.5rem; background: rgba(0,0,0,0.3); padding: 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 0.4rem;">Observed Behavioral Trajectory:</div>
+          <div id="trajectorySummaryDisplay" style="font-family: var(--font-mono); font-size: 0.95rem; color: #a5b4fc;">
+            Ready to track digital trajectory...
+          </div>
+        </div>
+
+        <!-- Factor Breakdown Table -->
+        <div style="margin-top: 1.5rem;">
+          <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Risk Factor Breakdown:</h3>
+          <div class="risk-breakdown-list" style="font-size: 0.85rem; gap: 0.6rem;">
+            <div class="breakdown-row" style="padding: 0.4rem 0; border-bottom: 1px solid var(--border-subtle);">
+              <span>Duration Off-Intent (Max 40 pts)</span>
+              <strong id="breakdownDurationPts" style="font-family: var(--font-mono);">0 pts</strong>
+            </div>
+            <div class="breakdown-row" style="padding: 0.4rem 0; border-bottom: 1px solid var(--border-subtle);">
+              <span>Intent Divergence Penalty (Max 30 pts)</span>
+              <strong id="breakdownMismatchPts" style="font-family: var(--font-mono);">0 pts</strong>
+            </div>
+            <div class="breakdown-row" style="padding: 0.4rem 0; border-bottom: 1px solid var(--border-subtle);">
+              <span>Context Switching Thrashing (Max 18 pts)</span>
+              <strong id="breakdownSwitchingPts" style="font-family: var(--font-mono);">0 pts</strong>
+            </div>
+            <div class="breakdown-row" style="padding: 0.4rem 0; border-bottom: 1px solid var(--border-subtle);">
+              <span>Repeated Diversion Streak (Max 20 pts)</span>
+              <strong id="breakdownRepetitionPts" style="font-family: var(--font-mono);">0 pts</strong>
+            </div>
+            <div class="breakdown-row" style="padding: 0.4rem 0; color: #10b981;">
+              <span>Productive Recovery Credit</span>
+              <strong id="breakdownRecoveryCredit" style="font-family: var(--font-mono);">0 pts</strong>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 1.25rem; font-size: 0.8rem; color: var(--text-muted);" id="riskFormulaExplanation">
+          Heuristic: Risk = Duration + Intent Mismatch + Switching Thrashing + Repetition - Recovery Credit.
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: BEHAVIORAL INSIGHTS & PERSONALIZATION -->
+    <div id="tab-insights" class="tab-pane">
+      <div class="insights-card">
+        <div class="intent-eyebrow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>
+          <span>Behavioral Adaptation</span>
+        </div>
+        <h2 class="intent-headline">Learned Personalization & Insights</h2>
+        <p id="adaptationSummaryText" class="intent-subtext">System initialized with balanced behavioral defaults. Adaptive tuning will begin after interventions.</p>
+
+        <div class="dashboard-grid" style="margin-top: 1rem;">
+          <div class="stat-card">
+            <span class="stat-title">FOCUS RECOVERY RATE</span>
+            <div id="overallRecoveryRateDisplay" class="stat-value" style="color: var(--color-flow);">85%</div>
+            <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">Interventions that successfully restored focus</span>
+          </div>
+
+          <div class="stat-card">
+            <span class="stat-title">MOST EFFECTIVE RESET</span>
+            <div id="bestActionDisplay" class="stat-value" style="font-size: 1.2rem; color: #a5b4fc;">3-Min Breath Reset</div>
+            <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">Highest empirical recovery rate for you</span>
+          </div>
+        </div>
+
+        <!-- Recent Interventions Log -->
+        <div style="margin-top: 1.5rem;">
+          <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem;">Intervention Outcome History:</h3>
+          <div id="outcomeHistoryList" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8rem;">
+            <!-- Populated via app.js -->
+            <p style="color: var(--text-muted);">No interventions recorded yet.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Interactive Guided 3-Minute Breath Reset Screen -->
+  <div id="breathResetModal" class="breath-reset-overlay" style="display: none;">
+    <div style="max-width: 450px;">
+      <h2 style="font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em;">3-Minute Breath Reset</h2>
+      <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.25rem;">Center your attention before returning to your declared focus goal.</p>
+
+      <div class="breath-circle-wrapper">
+        <div class="breath-orb"></div>
+      </div>
+
+      <div id="breathInstructionText" class="breath-instruction">Breathe in gently...</div>
+      <div id="breathTimerDisplay" class="breath-timer">03:00</div>
+
+      <button class="btn-action primary" style="margin: 0 auto;" onclick="closeBreathReset()">
+        <span>Complete Reset & Return to Focus</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

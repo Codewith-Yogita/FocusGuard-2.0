@@ -21822,6 +21822,7 @@
     "action_chosen": "NONE",
     "response_status": "PENDING_USER_RESPONSE",
     "verify_at": 1791541420.087913,
-    "recovery_outcome": "PENDING_VERIFICATION"
+    "recovery_outcome": "DRIFT_PERSISTED",
+    "verified_at": 1791544604.3250268
   }
 ]

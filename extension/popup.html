@@ -107,6 +107,10 @@
 
   <div class="status-card">
     <div class="status-row">
+      <span class="label">Who's Watching:</span>
+      <span id="watching-status" class="val val-good">👤 Eshan (Watching)</span>
+    </div>
+    <div class="status-row">
       <span class="label">Session:</span>
       <span id="session-status" class="val val-good">FLOW STATE</span>
     </div>
@@ -118,12 +122,17 @@
       <span class="label">Drift State:</span>
       <span id="drift-state" class="val val-good">Nominal</span>
     </div>
+    <div id="freeze-row" class="status-row" style="display: none; color: #38bdf8;">
+      <span class="label" style="color: #38bdf8; font-weight:700;">🥶 Tab Freeze:</span>
+      <span id="freeze-status" class="val" style="color: #38bdf8;">01:00 Active</span>
+    </div>
     <div class="goal-box">
       <strong style="color: #a5b4fc;">Declared Intent:</strong>
       <div id="goal-text">Syncing with Focus Guard 2.0...</div>
     </div>
   </div>
 
+  <button id="freeze-demo-btn" class="btn" style="background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;">🥶 Trigger 1-Min Freeze Punishment</button>
   <button id="breath-reset-btn" class="btn btn-reset">Take 3-Min Breath Reset</button>
   <button id="pause-break-btn" class="btn btn-break">Take 5-Min Break</button>
   <button id="open-dashboard-btn" class="btn btn-primary">Open 2.0 Web Dashboard</button>

@@ -1,11 +1,11 @@
 /**
- * FocusGuard Chrome Extension - Content Script
- * Pure in-page DOM HUD, Video Pause, and Tab-level Blocker.
+ * Focus Guard 2.0 Chrome Extension - In-Page Content Script
  * 
- * Benefits of DOM Injection:
- * 1. Confined ONLY to the webpage viewport inside the distracting tab.
- * 2. Leaves Chrome tabs strip, address bar, and bookmarks 100% clickable.
- * 3. Instantly pauses HTML5 videos and locks page scrolling without OS freezes.
+ * Provides Adaptive Digital-Wellbeing Interventions directly OVER the screen of distracting apps:
+ * - Level 1: Gentle in-page floating awareness banner
+ * - Level 2 / Level 3: AI Contextual Intervention Modal directly centered over distracting feeds
+ * - Level 3: Interactive In-Page 3-Minute Breath Reset Screen with pulsating breathing orb
+ * - Level 4: Focus Lock Restriction Shield (Window minimization / DOM shield)
  */
 
 (function () {
@@ -21,11 +21,27 @@
     return;
   }
 
+  // State Management
   let streakSeconds = 0;
   let isOverlayActive = false;
   let goalPausedUntil = 0;
   let lastCheckedHref = "";
   let isPageProductive = false;
+  let activeInterventionLevel = 0;
+  let lastPromptId = null;
+  let breathInterval = null;
+  let breathSecondsRemaining = 180;
+  let domLockoutInterval = null;
+  let freezeInterval = null;
+  let freezeRemainingSeconds = 60;
+
+  let currentSession = {
+    status: "IDLE",
+    intent: null,
+    risk: { score: 0, level: 0 },
+    drift: { drift_state: "NOMINAL", streak_seconds: 0 }
+  };
+
   const SERVER_URLS = [
     "http://127.0.0.1:8000",
     "http://127.0.0.1:8765",
@@ -34,8 +50,89 @@
   ];
   let activeServerUrl = "http://127.0.0.1:8000";
 
+  // =========================================================================
+  // STYLES INJECTION (ISOLATED IN-PAGE CSS)
+  // =========================================================================
+
+  function ensureInPageStyles() {
+    if (document.getElementById("fg-2-injected-styles")) return;
+    const style = document.createElement("style");
+    style.id = "fg-2-injected-styles";
+    style.textContent = `
+      @keyframes fgFadeIn {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      @keyframes fgSlideDown {
+        from { opacity: 0; transform: translate(-50%, -20px); }
+        to { opacity: 1; transform: translate(-50%, 0); }
+      }
+      @keyframes fgBreatheOrb {
+        0%, 100% {
+          transform: scale(0.85);
+          box-shadow: 0 0 35px rgba(56, 189, 248, 0.4), inset 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+        50% {
+          transform: scale(1.35);
+          box-shadow: 0 0 85px rgba(99, 102, 241, 0.8), inset 0 0 40px rgba(56, 189, 248, 0.5);
+        }
+      }
+      .fg-inpage-element {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif !important;
+        box-sizing: border-box !important;
+        user-select: none !important;
+      }
+      .fg-inpage-element * {
+        box-sizing: border-box !important;
+      }
+      .fg-btn {
+        cursor: pointer !important;
+        border: none !important;
+        outline: none !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+        border-radius: 10px !important;
+        padding: 9px 16px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        transition: all 0.2s ease !important;
+        text-decoration: none !important;
+      }
+      .fg-btn:hover {
+        transform: translateY(-1px) !important;
+      }
+      .fg-btn-primary {
+        background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4) !important;
+      }
+      .fg-btn-primary:hover {
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6) !important;
+      }
+      .fg-btn-calm {
+        background: linear-gradient(135deg, #0284c7, #0369a1) !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 15px rgba(2, 132, 199, 0.35) !important;
+      }
+      .fg-btn-secondary {
+        background: rgba(255, 255, 255, 0.08) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        color: #e2e8f0 !important;
+      }
+      .fg-btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.14) !important;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  // =========================================================================
+  // NETWORK REQUEST RELAY
+  // =========================================================================
+
   async function fetchFromAnyServer(path, options = {}) {
-    // 1. Try background service worker relay first (bypasses HTTPS mixed-content and CORS restrictions)
+    // 1. Try background relay first (bypasses HTTPS mixed-content & CORS)
     try {
       if (chrome.runtime?.sendMessage) {
         const bgRes = await new Promise((resolve) => {
@@ -70,60 +167,30 @@
     return null;
   }
 
-  let isEnforcementActive = true;
-  let isUserEnrolled = false;
-  let isGuestUser = false;
-  let isEnrolledUserWatching = true;
-
   function isGoalPaused() {
     return Date.now() < goalPausedUntil;
   }
 
-  // Check goal pause status & face-gated user presence from FocusGuard
-  async function syncGoalStatus() {
-    try {
-      // 1. Sync presence and enforcement status
-      const statusRes = await fetchFromAnyServer("/api/status");
-      if (statusRes && statusRes.ok) {
-        const data = await statusRes.json();
-        if (data.focus?.goalPausedUntil) {
-          const until = new Date(data.focus.goalPausedUntil).getTime();
-          if (until > Date.now()) {
-            goalPausedUntil = until;
-            dismissAllDomHud();
-          } else {
-            goalPausedUntil = 0;
-          }
-        }
-
-        if (data.presence) {
-          isUserEnrolled = !!data.presence.is_enrolled;
-          isGuestUser = !!data.presence.is_guest || (data.presence.identified_user === "guest");
-          isEnrolledUserWatching = (data.presence.user_present === true) && !isGuestUser;
-          if (data.presence.enforcement_active !== undefined) {
-            isEnforcementActive = !!data.presence.enforcement_active && !isGuestUser;
-          } else {
-            isEnforcementActive = isEnrolledUserWatching && !isGuestUser;
-          }
-        }
-      }
-
-      // 2. Sync quick goal status
-      const res = await fetchFromAnyServer("/api/goal/status");
-      if (res && res.ok) {
-        const data = await res.json();
-        if (data.is_paused) {
-          goalPausedUntil = Date.now() + (data.remaining_seconds * 1000);
-          dismissAllDomHud();
-        }
-      }
-    } catch {
-      // Server offline, use local in-memory state
+  function getTargetGoalDestination() {
+    if (currentSession.intent?.target_url) {
+      return {
+        url: currentSession.intent.target_url,
+        label: currentSession.intent.target_label || "Goal Workspace"
+      };
     }
+    const g = (currentSession.intent?.goal_text || "").toLowerCase();
+    if (g.includes("leetcode")) {
+      return { url: "https://leetcode.com/problemset/all/", label: "LeetCode Practice" };
+    }
+    if (g.includes("dsa") || g.includes("tree") || g.includes("graph") || g.includes("algorithm")) {
+      return { url: "https://www.youtube.com/results?search_query=dsa+trees+lecture+striver", label: "Striver DSA Trees Lecture" };
+    }
+    return { url: "https://takeuforward.org/strivers-a2z-dsa-course/strivers-a2z-dsa-course-sheet-2/", label: "Striver A2Z DSA Sheet" };
   }
 
-  setInterval(syncGoalStatus, 2000);
-  syncGoalStatus();
+  // =========================================================================
+  // DISTRACTION CLASSIFICATION (CONTEXT-AWARE)
+  // =========================================================================
 
   function isDistractionSite(href, title) {
     const url = (href || window.location.href || "").toLowerCase();
@@ -135,86 +202,44 @@
       return true;
     }
 
-    // 2. High-distraction social & entertainment domains
+    // 2. High-distraction social, entertainment & messaging domains
     const defaultDistractions = [
       "instagram.com", "snapchat.com", "tiktok.com", "reddit.com",
       "twitter.com", "x.com", "facebook.com", "netflix.com",
-      "twitch.tv", "pinterest.com", "discord.com"
+      "twitch.tv", "pinterest.com", "discord.com",
+      "web.whatsapp.com", "web.telegram.org", "messenger.com", "messages.google.com"
     ];
-    if (defaultDistractions.some(d => host.includes(d))) {
+    if (defaultDistractions.some(d => host.includes(d) || url.includes(d))) {
       return true;
     }
 
-    // 3. Regular YouTube watch pages
+    // 3. YouTube nuance:
     if (host.includes("youtube.com")) {
-      // Educational DSA / programming / tutorial / lecture content is ALLOWED
       const dsaTerms = [
         "dsa", "data structure", "algorithm", "leetcode", "striver",
         "tree", "graph", "dp", "binary search", "sorting", "recursion",
         "lecture", "course", "tutorial", "learn", "study", "code",
-        "programming", "cpp", "c++", "python", "java", "javascript", "react", "math"
+        "programming", "cpp", "c++", "python", "java", "javascript", "react", "math", "exam"
       ];
       if (dsaTerms.some(term => t.includes(term))) {
-        return false;
+        return false; // Educational video is ALIGNED!
       }
-      // Study music / background audio is ALLOWED
       if (t.includes("lofi") || t.includes("study beats") || t.includes("chillhop") || t.includes("ambient study")) {
-        return false;
+        return false; // Background music is permitted
       }
-      // Entertainment videos on YouTube are treated as distraction
-      return true;
+      return true; // General entertainment YouTube
     }
 
     return false;
   }
 
-  // Evaluate current video / page relevance against focus goal
-  async function evaluatePage() {
-    const currentHref = window.location.href;
-    const currentTitle = document.title;
-
-    if (currentHref.includes("/shorts") || window.location.pathname.includes("/shorts")) {
-      isPageProductive = false;
-      return;
-    }
-
-    if (currentHref === lastCheckedHref) return;
-    lastCheckedHref = currentHref;
-
-    try {
-      const res = await fetchFromAnyServer("/api/goal/evaluate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          app: "chrome.exe",
-          title: currentTitle,
-          url: currentHref
-        })
-      });
-      if (res && res.ok) {
-        const data = await res.json();
-        isPageProductive = (data.classification === "PRODUCTIVE" || data.relevant === true);
-        if (isPageProductive) {
-          dismissAllDomHud();
-          streakSeconds = 0;
-        }
-      }
-    } catch {
-      // Offline fallback: check DSA keywords in title
-      const titleLower = (currentTitle || "").toLowerCase();
-      const dsaTerms = ["dsa", "data structure", "algorithm", "leetcode", "striver", "tree", "graph", "dp", "binary search", "sorting", "recursion", "array", "code", "lecture", "tutorial"];
-      isPageProductive = dsaTerms.some(t => titleLower.includes(t));
-    }
-  }
-
-  // 1. Video Playback Stopper
+  // Media Playback & Scroll Helpers
   function stopVideos() {
     document.querySelectorAll("video, audio").forEach(media => {
       try { media.pause(); } catch (e) {}
     });
   }
 
-  // 2. Page Scroll Locker
   function lockScroll() {
     document.documentElement.style.setProperty("overflow", "hidden", "important");
     document.body.style.setProperty("overflow", "hidden", "important");
@@ -247,110 +272,576 @@
     }
   }
 
-  // 3. Heads-Up / Warning DOM Banner (4s and 7s)
-  function showDomBanner(level, title, message) {
-    let banner = document.getElementById("focusguard-dom-banner");
+  // =========================================================================
+  // LEVEL 1: IN-PAGE FLOATING AWARENESS BANNER (GENTLE NUDGE)
+  // =========================================================================
+
+  function showInPageAwarenessBanner(goalText, appLabel, seconds, customUrl, customLabel) {
+    ensureInPageStyles();
+    let banner = document.getElementById("focusguard-inpage-banner");
     if (!banner) {
       banner = document.createElement("div");
-      banner.id = "focusguard-dom-banner";
+      banner.id = "focusguard-inpage-banner";
+      banner.className = "fg-inpage-element";
       banner.style.cssText = `
         position: fixed;
         top: 20px;
         left: 50%;
         transform: translateX(-50%);
         z-index: 2147483640;
-        max-width: 600px;
-        width: 90%;
-        padding: 14px 20px;
+        max-width: 680px;
+        width: 92%;
+        padding: 12px 20px;
         border-radius: 16px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.7);
         backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        background: rgba(15, 23, 42, 0.94);
+        border: 2px solid rgba(245, 158, 11, 0.6);
+        color: #f8fafc;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        transition: all 0.3s ease;
+        animation: fgSlideDown 0.35s ease;
       `;
       document.body.appendChild(banner);
     }
 
-    const isWarn = (level === 2);
-    banner.style.background = isWarn ? "rgba(45, 20, 10, 0.92)" : "rgba(10, 20, 35, 0.92)";
-    banner.style.border = isWarn ? "2px solid #f59e0b" : "2px solid #38bdf8";
-    banner.style.color = isWarn ? "#fef3c7" : "#e0f2fe";
+    const target = getTargetGoalDestination();
+    const destUrl = customUrl || target.url;
+    const destLabel = customLabel || target.label;
+    const goalDisplay = goalText || (currentSession.intent ? currentSession.intent.goal_text : "your declared focus goal");
+    const timeDisplay = seconds >= 60 ? `${Math.floor(seconds / 60)}m` : `${seconds}s`;
 
     banner.innerHTML = `
       <div style="display:flex; align-items:center; gap:12px;">
-        <span style="font-size:22px;">${isWarn ? '⚠️' : '💡'}</span>
+        <span style="font-size:22px;">💡</span>
         <div>
-          <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:${isWarn ? '#f59e0b' : '#38bdf8'};">
-            ${title}
+          <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#f59e0b;">
+            Gentle Awareness — Focus Guard 2.0
           </div>
-          <div style="font-size:13px; font-weight:600; margin-top:2px;">
-            ${message}
+          <div style="font-size:13px; font-weight:600; color:#f1f5f9; margin-top:2px;">
+            Still on track for "<strong>${goalDisplay}</strong>"?
+          </div>
+          <div style="font-size:11px; color:#94a3b8; margin-top:1px;">
+            Observed ${appLabel} activity for ${timeDisplay}.
           </div>
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-        <button id="fg-banner-pause-btn" style="
-          background: rgba(245, 158, 11, 0.2);
-          border: 1px solid rgba(245, 158, 11, 0.5);
-          color: #fbbf24;
-          font-weight: 700;
-          font-size: 12px;
-          padding: 8px 12px;
-          border-radius: 10px;
-          cursor: pointer;
-          transition: background 0.2s;
-        ">⏸️ Pause Goal (5m)</button>
-        <button id="fg-banner-close-btn" style="
+        <button id="fg-banner-return-btn" class="fg-btn fg-btn-primary" style="padding: 8px 14px !important; font-size: 12px !important;">
+          <span>🚀 Launch ${destLabel}</span>
+        </button>
+        <button id="fg-banner-dismiss-btn" style="
           background: transparent;
           border: none;
           color: #94a3b8;
           font-size: 16px;
           cursor: pointer;
-          padding: 4px;
+          padding: 4px 6px;
         ">✕</button>
       </div>
     `;
 
-    document.getElementById("fg-banner-pause-btn")?.addEventListener("click", () => pauseGoal(5));
-    document.getElementById("fg-banner-close-btn")?.addEventListener("click", () => dismissAllDomHud());
+    document.getElementById("fg-banner-return-btn")?.addEventListener("click", () => {
+      handleActionReturnToGoal(destUrl, destLabel);
+    });
+    document.getElementById("fg-banner-dismiss-btn")?.addEventListener("click", () => {
+      banner.remove();
+      // Dismiss for 60 seconds
+      goalPausedUntil = Date.now() + 60000;
+    });
   }
 
-  // 4. Blocked DOM Overlay (10s)
-  let domLockoutInterval = null;
+  // =========================================================================
+  // LEVEL 2 / LEVEL 3: IN-PAGE AI ADAPTIVE INTERVENTION MODAL
+  // =========================================================================
 
-  async function showDomBlockedOverlay() {
-    if (document.getElementById("focusguard-dom-blocked-overlay")) return;
+  function showInPageInterventionModal(promptData) {
+    ensureInPageStyles();
+    // Stop videos on the distracting tab so they don't keep playing
+    stopVideos();
 
-    // Stop video and lock scroll
+    let overlay = document.getElementById("focusguard-inpage-modal-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "focusguard-inpage-modal-overlay";
+      overlay.className = "fg-inpage-element";
+      overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        z-index: 2147483645;
+        background: rgba(8, 12, 22, 0.88);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: fgFadeIn 0.3s ease;
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    const target = getTargetGoalDestination();
+    const destUrl = promptData.target_url || target.url;
+    const destLabel = promptData.target_label || target.label;
+
+    const title = promptData.headline || "Mind Mirror: Drifting from Goal";
+    const message = promptData.message || "Deep down you know this distraction won't help you achieve your goal. Let's switch right now.";
+    const rationale = promptData.rationale || "Observed activity diverges from declared focus goal.";
+    const tier = promptData.tier_level || 2;
+    const riskScore = promptData.risk_score || 60;
+    const goalText = promptData.goal_text || (currentSession.intent ? currentSession.intent.goal_text : "Focus Session");
+
+    const badgeLabel = tier === 3 ? "LEVEL 3 — FOCUS RESET RECOMMENDED" : "LEVEL 2 — AI INNER CONSCIENCE CHECK";
+    const badgeColor = tier === 3 ? "#ec4899" : "#8b5cf6";
+
+    overlay.innerHTML = `
+      <div style="
+        background: #0f172a;
+        border: 1px solid rgba(139, 92, 246, 0.35);
+        border-radius: 22px;
+        max-width: 560px;
+        width: 100%;
+        padding: 28px 28px;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.85), 0 0 40px rgba(99,102,241,0.25);
+        color: #f8fafc;
+        text-align: left;
+      ">
+        <!-- Header -->
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+          <div style="
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            font-size:11px;
+            font-weight:700;
+            text-transform:uppercase;
+            letter-spacing:1px;
+            color:${badgeColor};
+            background:rgba(139,92,246,0.12);
+            padding:5px 12px;
+            border-radius:999px;
+            border:1px solid rgba(139,92,246,0.25);
+          ">
+            <span>🧠</span>
+            <span>${badgeLabel}</span>
+          </div>
+          <span style="font-family:monospace; font-size:11px; color:#94a3b8;">
+            RISK: <strong style="color:#f43f5e;">${riskScore}%</strong>
+          </span>
+        </div>
+
+        <!-- Headline & Message -->
+        <h2 style="font-size:20px; font-weight:700; color:#ffffff; margin:0 0 8px 0; letter-spacing:-0.01em;">
+          ${title}
+        </h2>
+        <p style="font-size:14px; color:#cbd5e1; line-height:1.55; margin:0 0 12px 0;">
+          ${message}
+        </p>
+        <div style="
+          background: rgba(0,0,0,0.35);
+          border-left: 3px solid #8b5cf6;
+          padding: 9px 14px;
+          border-radius: 8px;
+          font-size: 12px;
+          color: #94a3b8;
+          margin-bottom: 18px;
+        ">
+          🎯 <strong>Target Goal:</strong> "${goalText}"<br>
+          🚀 <strong>Productive Resource:</strong> <span style="color:#38bdf8;">${destLabel}</span><br>
+          <em>${rationale}</em>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display:flex; flex-direction:column; gap:9px;">
+          <!-- Primary Teleport Button -->
+          <button id="fg-modal-return-btn" class="fg-btn fg-btn-primary" style="justify-content:center; padding:12px !important; font-size:14px !important;">
+            <span>🚀 Launch ${destLabel} Now</span>
+          </button>
+          
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:9px;">
+            <button id="fg-modal-breath-btn" class="fg-btn fg-btn-secondary" style="justify-content:center;">
+              <span>🧘 3-Min Breath Reset</span>
+            </button>
+            <button id="fg-modal-break-btn" class="fg-btn fg-btn-secondary" style="justify-content:center;">
+              <span>⏸️ 5-Min Planned Break</span>
+            </button>
+          </div>
+
+          <button id="fg-modal-dismiss-btn" style="
+            background:transparent;
+            border:none;
+            color:#64748b;
+            font-size:12px;
+            cursor:pointer;
+            padding:6px;
+            text-align:center;
+            margin-top:2px;
+          ">Dismiss (Snooze for 60s)</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("fg-modal-return-btn")?.addEventListener("click", () => {
+      handleActionReturnToGoal(destUrl, destLabel);
+    });
+
+    document.getElementById("fg-modal-breath-btn")?.addEventListener("click", () => {
+      overlay.remove();
+      showInPageBreathReset();
+    });
+
+    document.getElementById("fg-modal-break-btn")?.addEventListener("click", () => {
+      handleActionShortBreak();
+    });
+
+    document.getElementById("fg-modal-dismiss-btn")?.addEventListener("click", () => {
+      handleActionDismiss();
+    });
+  }
+
+  // =========================================================================
+  // LEVEL 3: IN-PAGE GUIDED 3-MINUTE BREATH RESET SCREEN
+  // =========================================================================
+
+  function showInPageBreathReset() {
+    ensureInPageStyles();
+    stopVideos();
+    lockScroll();
+
+    let overlay = document.getElementById("focusguard-inpage-breath-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "focusguard-inpage-breath-overlay";
+      overlay.className = "fg-inpage-element";
+      overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        z-index: 2147483646;
+        background: rgba(7, 9, 14, 0.94);
+        backdrop-filter: blur(28px);
+        -webkit-backdrop-filter: blur(28px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+        color: #f8fafc;
+        animation: fgFadeIn 0.4s ease;
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    breathSecondsRemaining = 180;
+
+    overlay.innerHTML = `
+      <div style="max-width: 440px; width: 100%; margin: 0 auto;">
+        <div style="
+          display:inline-block;
+          font-size: 11px;
+          font-weight: 700;
+          color: #38bdf8;
+          text-transform: uppercase;
+          letter-spacing: 1.5px;
+          background: rgba(56, 189, 248, 0.1);
+          border: 1px solid rgba(56, 189, 248, 0.25);
+          padding: 5px 14px;
+          border-radius: 999px;
+          margin-bottom: 12px;
+        ">
+          Mindfulness Reset
+        </div>
+        <h2 style="font-size: 26px; font-weight: 700; color: #ffffff; margin: 0; letter-spacing: -0.02em;">
+          3-Minute Breath Reset
+        </h2>
+        <p style="font-size: 13px; color: #94a3b8; margin: 6px 0 24px 0;">
+          Center your attention before returning to your declared focus goal.
+        </p>
+
+        <!-- Pulsating Breathing Orb -->
+        <div style="
+          position: relative;
+          width: 200px;
+          height: 200px;
+          margin: 0 auto 24px;
+          display: grid;
+          place-items: center;
+        ">
+          <div style="
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #38bdf8, #6366f1);
+            animation: fgBreatheOrb 8s infinite ease-in-out;
+          "></div>
+        </div>
+
+        <div id="fg-inpage-breath-instr" style="
+          font-size: 18px;
+          font-weight: 600;
+          color: #ffffff;
+          min-height: 28px;
+          margin-bottom: 6px;
+        ">Breathe in deeply...</div>
+
+        <div id="fg-inpage-breath-timer" style="
+          font-family: monospace;
+          font-size: 32px;
+          font-weight: 700;
+          color: #a5b4fc;
+          margin-bottom: 24px;
+        ">03:00</div>
+
+        <button id="fg-inpage-breath-complete-btn" class="fg-btn fg-btn-calm" style="
+          padding: 12px 24px !important;
+          font-size: 14px !important;
+          margin: 0 auto;
+        ">
+          <span>Complete Reset & Return to Focus</span>
+        </button>
+      </div>
+    `;
+
+    const instrEl = document.getElementById("fg-inpage-breath-instr");
+    const timerEl = document.getElementById("fg-inpage-breath-timer");
+
+    clearInterval(breathInterval);
+    breathInterval = setInterval(() => {
+      breathSecondsRemaining--;
+      const m = Math.floor(breathSecondsRemaining / 60).toString().padStart(2, "0");
+      const s = (breathSecondsRemaining % 60).toString().padStart(2, "0");
+      if (timerEl) timerEl.textContent = `${m}:${s}`;
+
+      // 8-second breathing rhythm (4s in, 4s out)
+      const cycle = breathSecondsRemaining % 8;
+      if (cycle >= 4) {
+        if (instrEl) instrEl.textContent = "Breathe in deeply...";
+      } else {
+        if (instrEl) instrEl.textContent = "Breathe out gently...";
+      }
+
+      if (breathSecondsRemaining <= 0) {
+        finishBreathReset();
+      }
+    }, 1000);
+
+    document.getElementById("fg-inpage-breath-complete-btn")?.addEventListener("click", () => {
+      finishBreathReset();
+    });
+  }
+
+  function finishBreathReset() {
+    clearInterval(breathInterval);
+    document.getElementById("focusguard-inpage-breath-overlay")?.remove();
+    unlockScroll();
+
+    // Notify backend of completion
+    fetchFromAnyServer("/api/v2/intervention/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intervention_id: "int_inpage", action_id: "BREATH_RESET" })
+    }).catch(() => {});
+
+    // Grant 3-minute grace immunity
+    goalPausedUntil = Date.now() + (3 * 60 * 1000);
+    streakSeconds = 0;
+    isPageProductive = true;
+
+    showToast("✨ Mind centered! 3-minute grace period active. Close this tab to stay in flow.");
+  }
+
+  // =========================================================================
+  // 1-MINUTE TAB FREEZE PUNISHMENT (EXCESS DISTRACTION LOCKOUT)
+  // =========================================================================
+
+  function showInPageFreezePunishment(reasonText, secondsLeft = 60) {
+    ensureInPageStyles();
     stopVideos();
     lockScroll();
     isOverlayActive = true;
 
-    // Remove heads up banner
-    document.getElementById("focusguard-dom-banner")?.remove();
+    // Dismiss softer prompts
+    document.getElementById("focusguard-inpage-banner")?.remove();
+    document.getElementById("focusguard-inpage-modal-overlay")?.remove();
+    document.getElementById("focusguard-inpage-breath-overlay")?.remove();
+    document.getElementById("focusguard-dom-blocked-overlay")?.remove();
 
-    // Default random lockout between 2400s and 3600s (~40m to 60m)
-    let lockoutRemainingSeconds = Math.floor(Math.random() * (3600 - 2400 + 1)) + 2400;
+    if (document.getElementById("focusguard-tab-freeze-overlay")) {
+      return; // Already active and counting down
+    }
+
+    freezeRemainingSeconds = secondsLeft > 0 ? secondsLeft : 60;
 
     const overlay = document.createElement("div");
-    overlay.id = "focusguard-dom-blocked-overlay";
+    overlay.id = "focusguard-tab-freeze-overlay";
+    overlay.className = "fg-inpage-element";
     overlay.style.cssText = `
       position: fixed;
       inset: 0;
       z-index: 2147483647;
-      background: rgba(8, 14, 26, 0.92);
+      background: radial-gradient(circle at 50% 30%, rgba(14, 165, 233, 0.25), rgba(3, 7, 18, 0.97) 70%);
+      backdrop-filter: blur(32px) saturate(180%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: fgFadeIn 0.35s ease;
+      cursor: not-allowed;
+    `;
+
+    overlay.innerHTML = `
+      <div style="
+        background: rgba(15, 23, 42, 0.95);
+        border: 2px solid rgba(56, 189, 248, 0.7);
+        border-radius: 28px;
+        max-width: 520px;
+        width: 100%;
+        padding: 34px 30px;
+        text-align: center;
+        box-shadow: 0 30px 80px rgba(0,0,0,0.9), 0 0 50px rgba(56, 189, 248, 0.35);
+        color: #f8fafc;
+        position: relative;
+        overflow: hidden;
+      ">
+        <!-- Ice frost sheen decoration -->
+        <div style="
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 4px;
+          background: linear-gradient(90deg, #38bdf8, #818cf8, #38bdf8);
+        "></div>
+
+        <div style="
+          width: 64px;
+          height: 64px;
+          margin: 0 auto 14px;
+          border-radius: 22px;
+          background: rgba(56, 189, 248, 0.15);
+          border: 1px solid rgba(56, 189, 248, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 32px;
+          box-shadow: 0 0 25px rgba(56, 189, 248, 0.3);
+        ">🥶</div>
+
+        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(56, 189, 248, 0.15); border:1px solid rgba(56, 189, 248, 0.4); color:#38bdf8; border-radius:999px; padding:4px 14px; font-size:11px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:10px;">
+          <span>❄️ 1-Minute Tab Freeze Penalty</span>
+        </div>
+
+        <h2 style="font-size: 24px; font-weight: 800; margin: 4px 0 10px; color: #ffffff; letter-spacing:-0.02em;">
+          Tab Completely Frozen
+        </h2>
+
+        <p style="font-size: 13.5px; color: #94a3b8; line-height: 1.55; margin-bottom: 20px;">
+          ${reasonText || "Excessive digital distraction detected (Instagram / YouTube Shorts / Unnecessary texting). As an active penalty, you cannot use this tab for 1 minute."}
+        </p>
+
+        <!-- Prominent Freeze Countdown Timer -->
+        <div style="
+          background: rgba(2, 6, 23, 0.75);
+          border: 1px solid rgba(56, 189, 248, 0.3);
+          border-radius: 18px;
+          padding: 16px 20px;
+          margin-bottom: 22px;
+        ">
+          <div style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">
+            Freeze Penalty Remaining
+          </div>
+          <div id="fg-freeze-countdown" style="
+            font-size: 42px;
+            font-weight: 800;
+            color: #38bdf8;
+            font-family: monospace;
+            letter-spacing: 2px;
+            text-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
+          ">
+            01:00
+          </div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+            Tab will automatically unfreeze when the timer reaches zero
+          </div>
+        </div>
+
+        <!-- Allowed Action: Teleport Back to Goal -->
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <button id="fg-freeze-teleport-btn" class="fg-btn fg-btn-primary" style="justify-content:center; padding:13px !important; font-size:13.5px !important; background:linear-gradient(135deg, #0284c7, #2563eb) !important; box-shadow:0 4px 20px rgba(2, 132, 199, 0.45) !important;">
+            <span>🚀 Teleport to Goal Workspace (Resume Focus)</span>
+          </button>
+          <div style="font-size:11.5px; color:#64748b;">
+            Returning to your focus goal clears your penalty immediately.
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    document.getElementById("fg-freeze-teleport-btn")?.addEventListener("click", () => {
+      const target = getTargetGoalDestination();
+      handleActionReturnToGoal(target.url, target.label);
+    });
+
+    if (freezeInterval) clearInterval(freezeInterval);
+    freezeInterval = setInterval(() => {
+      freezeRemainingSeconds--;
+      const timerEl = document.getElementById("fg-freeze-countdown");
+      if (timerEl) {
+        const m = Math.floor(freezeRemainingSeconds / 60).toString().padStart(2, "0");
+        const s = (freezeRemainingSeconds % 60).toString().padStart(2, "0");
+        timerEl.textContent = `${m}:${s}`;
+      }
+      stopVideos();
+
+      if (freezeRemainingSeconds <= 0) {
+        clearInterval(freezeInterval);
+        document.getElementById("focusguard-tab-freeze-overlay")?.remove();
+        unlockScroll();
+        isOverlayActive = false;
+        goalPausedUntil = Date.now() + 30000; // 30s grace period
+        showToast("🔓 1-Minute Tab Freeze Penalty lifted! Please return to your focus goal.");
+      }
+    }, 1000);
+  }
+
+  // =========================================================================
+  // LEVEL 4: IN-PAGE RESTRICTION SHIELD (FOCUS LOCKDOWN)
+  // =========================================================================
+
+  function showInPageRestrictionShield() {
+    ensureInPageStyles();
+    stopVideos();
+    lockScroll();
+    isOverlayActive = true;
+
+    // Dismiss softer prompts
+    document.getElementById("focusguard-inpage-banner")?.remove();
+    document.getElementById("focusguard-inpage-modal-overlay")?.remove();
+
+    if (document.getElementById("focusguard-dom-blocked-overlay")) return;
+
+    let lockoutRemainingSeconds = 1200; // 20 minutes
+
+    const overlay = document.createElement("div");
+    overlay.id = "focusguard-dom-blocked-overlay";
+    overlay.className = "fg-inpage-element";
+    overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      background: rgba(8, 14, 26, 0.94);
       backdrop-filter: blur(28px) saturate(160%);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      color: #f8fafc;
       padding: 20px;
-      user-select: none;
+      animation: fgFadeIn 0.3s ease;
     `;
 
     overlay.innerHTML = `
@@ -363,29 +854,33 @@
         padding: 32px 28px;
         text-align: center;
         box-shadow: 0 25px 60px rgba(0,0,0,0.85), 0 0 40px rgba(244,63,94,0.3);
+        color: #f8fafc;
       ">
         <div style="
-          width: 60px;
-          height: 60px;
-          margin: 0 auto 14px;
-          border-radius: 20px;
+          width: 56px;
+          height: 56px;
+          margin: 0 auto 12px;
+          border-radius: 18px;
           background: rgba(244, 63, 94, 0.15);
           border: 1px solid rgba(244, 63, 94, 0.4);
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 28px;
+          font-size: 26px;
         ">🛑</div>
 
         <div style="font-size: 11px; font-weight: 800; color: #f43f5e; text-transform: uppercase; letter-spacing: 2px;">
-          FocusGuard Lockdown
+          Level 4 — Restriction Active
         </div>
         <h2 style="font-size: 22px; font-weight: 800; margin: 6px 0 8px; color: #ffffff;">
-          Window & Tab Disabled
+          Focus Lock Engaged
         </h2>
+        <p style="font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 16px;">
+          Suggestions were dismissed. Non-essential video and social feeds are temporarily restricted to help you regain control.
+        </p>
 
-        <!-- Random Tab Lockout Timer Badge -->
-        <div id="fg-tab-lockout-badge" style="
+        <!-- Lockout Timer -->
+        <div style="
           display: inline-flex;
           align-items: center;
           gap: 6px;
@@ -397,173 +892,202 @@
           font-size: 12px;
           font-weight: 700;
           font-family: monospace;
-          margin-bottom: 16px;
-        ">
-          <span>🔒 Tab Disabled:</span>
-          <span id="fg-lockout-timer-text">${Math.floor(lockoutRemainingSeconds / 60)}m ${lockoutRemainingSeconds % 60}s (${lockoutRemainingSeconds}s)</span>
-        </div>
-
-        <!-- Groq AI Explanation Box -->
-        <div id="fg-groq-explanation-box" style="
-          background: rgba(30, 41, 59, 0.7);
-          border: 1px solid rgba(59, 130, 246, 0.35);
-          border-radius: 14px;
-          padding: 14px 16px;
-          text-align: left;
           margin-bottom: 20px;
-          font-size: 13px;
-          line-height: 1.5;
         ">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-            <span style="font-size: 10px; font-weight: 800; color: #60a5fa; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 4px;">
-              ⚡ Groq Intelligence Analysis
-            </span>
-            <span style="font-size: 10px; color: #94a3b8;">compound-mini</span>
-          </div>
-          <div id="fg-groq-reason-text" style="color: #e2e8f0; font-style: italic;">
-            Connecting to Groq AI to analyze focus conflict...
-          </div>
+          ⏳ Lock Duration: <span id="fg-inpage-lock-timer">20:00</span>
         </div>
 
-        <!-- Action Buttons -->
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-          <button id="fg-close-tab-btn" style="
-            background: #f43f5e;
-            border: none;
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: 700;
-            padding: 11px 18px;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: opacity 0.2s;
-          ">✕ Close Tab & Return to Work</button>
+        <!-- Quick Recovery Actions -->
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <button id="fg-lock-teleport-btn" class="fg-btn fg-btn-primary" style="justify-content:center; padding:12px !important; font-size:13px !important;">
+            <span>🚀 Teleport to Goal Workspace Now</span>
+          </button>
 
-          <button id="fg-clear-every-action-btn" style="
-            background: rgba(239, 68, 68, 0.16);
-            border: 1px solid rgba(239, 68, 68, 0.45);
-            color: #fca5a5;
-            font-size: 13px;
-            font-weight: 700;
-            padding: 10px 18px;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-          ">🧹 Clear Every Action (Reset All)</button>
+          <button id="fg-lock-breath-btn" class="fg-btn fg-btn-secondary" style="justify-content:center; padding:10px !important;">
+            <span>🧘 Take 3-Min Reset to Unlock</span>
+          </button>
 
-          <button id="fg-dom-pause-btn" style="
-            background: rgba(245, 158, 11, 0.15);
-            border: 1px solid rgba(245, 158, 11, 0.4);
-            color: #fbbf24;
-            font-size: 13px;
-            font-weight: 700;
-            padding: 10px 18px;
-            border-radius: 12px;
-            cursor: pointer;
-          ">⏸️ Pause Goal (5m Break)</button>
-
-          <!-- PIN Fallback -->
-          <div style="display: flex; gap: 8px; justify-content: center; margin-top: 4px;">
-            <input id="fg-pin-input" type="password" maxlength="8" placeholder="PIN (Default: 1234)" style="
-              width: 140px;
-              padding: 9px 12px;
+          <!-- PIN Unlock Fallback -->
+          <div style="display:flex; gap:8px; margin-top:4px;">
+            <input type="password" id="fg-pin-input" placeholder="Security PIN (Default: 1234)" style="
+              flex: 1;
+              background: rgba(0,0,0,0.4);
+              border: 1px solid rgba(255,255,255,0.15);
               border-radius: 10px;
-              background: #1e293b;
-              border: 1px solid #334155;
-              color: #f8fafc;
-              font-family: monospace;
-              text-align: center;
+              padding: 9px 12px;
+              color: #fff;
               font-size: 13px;
               outline: none;
             ">
-            <button id="fg-pin-unlock-btn" style="
-              background: #0284c7;
-              border: none;
-              color: #ffffff;
-              font-weight: 700;
-              font-size: 12px;
-              padding: 9px 16px;
-              border-radius: 10px;
-              cursor: pointer;
-            ">🔓 Unlock PIN</button>
+            <button id="fg-pin-unlock-btn" class="fg-btn fg-btn-secondary">
+              <span>Unlock</span>
+            </button>
           </div>
+
+          <button id="fg-lock-close-btn" class="fg-btn fg-btn-secondary" style="justify-content:center; margin-top:2px;">
+            <span>✕ Close Distracting Tab</span>
+          </button>
         </div>
       </div>
     `;
 
-    document.body.appendChild(overlay);
+    document.getElementById("fg-lock-teleport-btn")?.addEventListener("click", () => {
+      const target = getTargetGoalDestination();
+      handleActionReturnToGoal(target.url, target.label);
+    });
 
-    // Fetch Groq explanation and random cooldown from backend
-    (async () => {
-      try {
-        const isShorts = window.location.href.includes("/shorts");
-        const appLabel = isShorts ? "YouTube Shorts" : "YouTube";
-        const res = await fetchFromAnyServer("/api/block/explain", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            app: appLabel,
-            title: document.title,
-            url: window.location.href
-          })
-        });
-        if (res && res.ok) {
-          const data = await res.json();
-          const reasonEl = document.getElementById("fg-groq-reason-text");
-          if (reasonEl && data.groq_explanation) {
-            reasonEl.textContent = `"${data.groq_explanation}"`;
-            reasonEl.style.fontStyle = "normal";
-          }
-          if (data.cooldown_seconds) {
-            lockoutRemainingSeconds = data.cooldown_seconds;
-          }
-        }
-      } catch (err) {
-        console.warn("Could not fetch Groq block explanation:", err);
-      }
-    })();
+    document.getElementById("fg-lock-breath-btn")?.addEventListener("click", () => {
+      overlay.remove();
+      showInPageBreathReset();
+    });
 
-    // Start live countdown ticker
+    document.getElementById("fg-pin-unlock-btn")?.addEventListener("click", () => {
+      verifyPinUnlock();
+    });
+
+    document.getElementById("fg-lock-close-btn")?.addEventListener("click", () => {
+      const target = getTargetGoalDestination();
+      handleActionReturnToGoal(target.url, target.label);
+    });
+
     if (domLockoutInterval) clearInterval(domLockoutInterval);
     domLockoutInterval = setInterval(() => {
       lockoutRemainingSeconds--;
-      const timerEl = document.getElementById("fg-lockout-timer-text");
+      const timerEl = document.getElementById("fg-inpage-lock-timer");
       if (timerEl) {
-        const m = Math.floor(lockoutRemainingSeconds / 60);
-        const s = lockoutRemainingSeconds % 60;
-        timerEl.textContent = `${m}m ${s}s (${lockoutRemainingSeconds}s)`;
+        const m = Math.floor(lockoutRemainingSeconds / 60).toString().padStart(2, "0");
+        const s = (lockoutRemainingSeconds % 60).toString().padStart(2, "0");
+        timerEl.textContent = `${m}:${s}`;
       }
-
-      // Keep videos paused and scroll locked while tab is disabled
       stopVideos();
-
       if (lockoutRemainingSeconds <= 0) {
         clearInterval(domLockoutInterval);
         dismissAllDomHud();
       }
     }, 1000);
+  }
 
-    document.getElementById("fg-close-tab-btn")?.addEventListener("click", () => {
-      try {
-        window.close();
-      } catch (e) {}
-      // If window.close() blocked by browser security, redirect to blank
-      window.location.href = "about:blank";
-    });
+  // =========================================================================
+  // ACTION HANDLERS
+  // =========================================================================
 
-    document.getElementById("fg-clear-every-action-btn")?.addEventListener("click", () => {
-      clearEveryAction(true);
-    });
+  function handleActionReturnToGoal(overrideUrl, overrideLabel) {
+    dismissAllDomHud();
+    streakSeconds = 0;
+    stopVideos();
 
-    document.getElementById("fg-dom-pause-btn")?.addEventListener("click", () => {
-      if (domLockoutInterval) clearInterval(domLockoutInterval);
-      pauseGoal(5);
-    });
+    const target = getTargetGoalDestination();
+    const destUrl = overrideUrl || target.url;
+    const destLabel = overrideLabel || target.label;
 
-    document.getElementById("fg-pin-unlock-btn")?.addEventListener("click", () => {
-      if (domLockoutInterval) clearInterval(domLockoutInterval);
-      verifyPinUnlock();
-    });
+    showToast(`🚀 Teleporting to ${destLabel}...`);
+
+    fetchFromAnyServer("/api/v2/intervention/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intervention_id: "int_inpage", action_id: "RETURN_TO_GOAL" })
+    }).then(async (res) => {
+      if (res && res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.result?.status === "ESCALATED_LOCK" || data.result?.is_focus_locked) {
+          showInPageRestrictionShield();
+          return;
+        }
+      }
+    }).catch(() => {});
+
+    // Teleport immediately!
+    // 1. Tell background service worker to open the target tab and close this distracting tab
+    try {
+      if (chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          action: "TELEPORT_TO_GOAL",
+          url: destUrl,
+          closeTab: true
+        }, (res) => {
+          if (chrome.runtime.lastError || !res || !res.success) {
+            window.location.href = destUrl;
+          }
+        });
+      } else {
+        window.location.href = destUrl;
+      }
+    } catch (e) {
+      window.location.href = destUrl;
+    }
+
+    // Secondary fallback: if tab didn't close and still on distraction, navigate directly
+    setTimeout(() => {
+      if (window.location.href !== destUrl && isDistractionSite(window.location.href, document.title)) {
+        window.location.href = destUrl;
+      }
+    }, 400);
+  }
+
+  function handleActionShortBreak() {
+    dismissAllDomHud();
+    goalPausedUntil = Date.now() + (5 * 60 * 1000); // 5 minutes break
+    streakSeconds = 0;
+
+    fetchFromAnyServer("/api/v2/intervention/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intervention_id: "int_inpage", action_id: "SHORT_BREAK" })
+    }).catch(() => {});
+
+    showToast("⏸️ 5-minute focus break started. Interventions paused.");
+  }
+
+  function handleActionDismiss() {
+    dismissAllDomHud();
+    goalPausedUntil = Date.now() + (60 * 1000); // 60s snooze
+    streakSeconds = 0;
+
+    fetchFromAnyServer("/api/v2/intervention/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intervention_id: "int_inpage", action_id: "DISMISS" })
+    }).catch(() => {});
+
+    showToast("⏳ Snoozed for 60 seconds.");
+  }
+
+  async function verifyPinUnlock() {
+    const pinInput = document.getElementById("fg-pin-input");
+    const pin = pinInput ? pinInput.value.trim() : "";
+    let valid = (pin === "1234");
+
+    try {
+      const res = await fetchFromAnyServer("/api/face/pin/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pin })
+      });
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.valid) valid = true;
+      }
+    } catch {}
+
+    if (valid) {
+      dismissAllDomHud();
+      goalPausedUntil = Date.now() + (5 * 60 * 1000);
+      showToast("🔓 Unlocked with PIN! Distraction restriction cleared.");
+    } else {
+      showToast("❌ Incorrect PIN. Default is 1234.");
+    }
+  }
+
+  function dismissAllDomHud() {
+    document.getElementById("focusguard-inpage-banner")?.remove();
+    document.getElementById("focusguard-inpage-modal-overlay")?.remove();
+    document.getElementById("focusguard-inpage-breath-overlay")?.remove();
+    document.getElementById("focusguard-dom-blocked-overlay")?.remove();
+    document.getElementById("focusguard-tab-freeze-overlay")?.remove();
+    if (freezeInterval) clearInterval(freezeInterval);
+    if (domLockoutInterval) clearInterval(domLockoutInterval);
+    unlockScroll();
+    isOverlayActive = false;
   }
 
   function showToast(message) {
@@ -571,6 +1095,7 @@
     if (!toast) {
       toast = document.createElement("div");
       toast.id = "fg-toast";
+      toast.className = "fg-inpage-element";
       toast.style.cssText = `
         position: fixed;
         bottom: 24px;
@@ -582,7 +1107,6 @@
         border: 1px solid #38bdf8;
         padding: 10px 20px;
         border-radius: 12px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         font-size: 13px;
         font-weight: 600;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
@@ -595,207 +1119,182 @@
     setTimeout(() => {
       toast.style.opacity = "0";
       setTimeout(() => toast.remove(), 300);
-    }, 2500);
+    }, 3000);
   }
 
-  // 5. Pause Goal Handler
-  async function pauseGoal(minutes = 5) {
-    goalPausedUntil = Date.now() + (minutes * 60 * 1000);
-    dismissAllDomHud();
+  // =========================================================================
+  // TELEMETRY SYNC & EVALUATION LOOP
+  // =========================================================================
 
-    await fetchFromAnyServer("/api/goal/pause", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ minutes: minutes })
-    });
-
-    showToast(`⏸️ Goal paused for ${minutes}m. Distraction warnings suspended.`);
-  }
-
-  // 6. PIN Unlock Handler
-  async function verifyPinUnlock() {
-    const pinInput = document.getElementById("fg-pin-input");
-    const pin = pinInput ? pinInput.value.trim() : "";
-    let valid = false;
-
-    const res = await fetchFromAnyServer("/api/face/pin/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pin })
-    });
-    if (res && res.ok) {
-      try {
-        const data = await res.json();
-        if (data.valid) valid = true;
-      } catch {}
-    } else {
-      if (pin === "1234") valid = true;
-    }
-
-    if (valid) {
-      dismissAllDomHud();
-      goalPausedUntil = Date.now() + (5 * 60 * 1000);
-      showToast("🔓 Unlocked with PIN! Distraction restriction cleared.");
-    } else {
-      showToast("❌ Incorrect PIN. Default is 1234.");
-    }
-  }
-
-  function dismissAllDomHud() {
-    document.getElementById("focusguard-dom-banner")?.remove();
-    document.getElementById("focusguard-dom-blocked-overlay")?.remove();
-    unlockScroll();
-    isOverlayActive = false;
-    streakSeconds = 0;
-  }
-
-  // 6.5. Clear Every Action & Remove All Restraints
-  function clearEveryAction(notifyBackend = true) {
-    if (domLockoutInterval) {
-      clearInterval(domLockoutInterval);
-      domLockoutInterval = null;
-    }
-
-    // Remove all DOM elements inserted by FocusGuard
-    document.getElementById("focusguard-dom-banner")?.remove();
-    document.getElementById("focusguard-dom-blocked-overlay")?.remove();
-    document.getElementById("fg-toast")?.remove();
-
-    // Re-enable window scrolling and events
-    unlockScroll();
-
-    // Reset tracking counters and flags
-    isOverlayActive = false;
-    streakSeconds = 0;
-    goalPausedUntil = 0;
-    lastCheckedHref = "";
-
-    // 30s temporary grace immunity on current page
-    isPageProductive = true;
-    setTimeout(() => {
-      isPageProductive = false;
-    }, 30000);
-
-    // Notify backend servers to clear cooldowns and resume goal
-    if (notifyBackend) {
-      fetchFromAnyServer("/api/cooldown/clear", { method: "POST" }).catch(() => {});
-      fetchFromAnyServer("/api/goal/resume", { method: "POST" }).catch(() => {});
-      try {
-        chrome.runtime.sendMessage({ action: "CLEAR_EVERY_ACTION" }, () => {
-          if (chrome.runtime.lastError) {}
-        });
-      } catch (e) {}
-    }
-
-    showToast("🧹 All FocusGuard actions & lockouts cleared!");
-  }
-
-  // 7. Active Tab Tick Loop
-  setInterval(() => {
-    // Only track when user is actively looking at this tab
-    if (document.hidden || isGoalPaused()) {
-      return;
-    }
-
+  async function evaluatePage() {
     const currentHref = window.location.href;
     const currentTitle = document.title;
     const isDistraction = isDistractionSite(currentHref, currentTitle);
 
-    // ============================================================
-    // FACE-GATED RESTRICTIONS (GUEST vs ENROLLED USER)
-    // ============================================================
-    // If Guest Mode is explicitly enabled on dashboard or confirmed guest,
-    // distractions are bypassed so the guest can browse flawlessly.
-    if (isGuestUser) {
-      if (streakSeconds > 0) {
-        streakSeconds = 0;
-        dismissAllDomHud();
-      }
+    // If tab is currently immune or productive
+    if (!isDistraction || isGoalPaused()) {
+      isPageProductive = true;
+      streakSeconds = 0;
+      dismissAllDomHud();
       return;
     }
 
-    // If page is not a distraction or recognized as productive for active goal, reset streak
-    if (!isDistraction || isPageProductive) {
-      if (streakSeconds > 0) {
-        streakSeconds = 0;
-        dismissAllDomHud();
-      }
-      return;
-    }
+    try {
+      const res = await fetchFromAnyServer("/api/v2/telemetry/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          app: "chrome.exe",
+          title: currentTitle,
+          url: currentHref
+        })
+      });
 
-    if (isOverlayActive) {
-      stopVideos();
-      return;
-    }
+      if (res && res.ok) {
+        const data = await res.json();
+        currentSession.status = data.session_status || "ACTIVE";
+        currentSession.intent = data.intent;
+        currentSession.risk = data.risk || { score: 0, level: 0 };
+        currentSession.drift = data.drift || { drift_state: "NOMINAL", distraction_streak_seconds: 0 };
 
-    streakSeconds += 1;
-    console.log(`[FocusGuard Shield] Distraction detected on ${window.location.hostname}: ${streakSeconds}s / 10s`);
-
-    // 4s Heads-Up HUD
-    if (streakSeconds >= 4 && streakSeconds < 7) {
-      showDomBanner(1, "FocusGuard Heads-Up (4s)", "You have drifted from your goal. Wrap up shortly.");
-    }
-
-    // 7s Warning HUD
-    if (streakSeconds >= 7 && streakSeconds < 10) {
-      const rem = 10 - streakSeconds;
-      showDomBanner(2, "FocusGuard Warning (7s)", `⚠️ ${rem}s remaining before distraction lockout. Refocus now!`);
-      // Light alert sound
-      try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (AudioContext) {
-          const ctx = new AudioContext();
-          if (ctx.state === "suspended") ctx.resume();
-          const osc = ctx.createOscillator();
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(700, ctx.currentTime);
-          osc.connect(ctx.destination);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.15);
+        // Check if page is marked productive by server intent engine
+        if (data.relevant === true || data.classification === "PRODUCTIVE" || data.classification === "ALIGNED") {
+          isPageProductive = true;
+          streakSeconds = 0;
+          dismissAllDomHud();
+          return;
         }
-      } catch {}
+
+        isPageProductive = false;
+
+        // 1-Minute Tab Freeze Punishment Check
+        if (data.is_freeze_punished || data.freeze_punishment?.active) {
+          const rem = data.freeze_punishment?.remaining_seconds || 60;
+          const rsn = data.freeze_punishment?.reason || "Excessive distraction detected (Instagram / YouTube Shorts / Unnecessary texting). 1-Minute Tab Freeze Penalty enforced.";
+          showInPageFreezePunishment(rsn, rem);
+          return;
+        }
+
+        // Level 4 Check: Lock engagement
+        if (data.is_focus_locked || data.risk?.level === 4) {
+          showInPageRestrictionShield();
+          return;
+        }
+
+        // Active prompt received from 2.0 AI Recommendation Engine
+        if (data.active_prompt) {
+          const p = data.active_prompt;
+          const target = getTargetGoalDestination();
+          const targetUrl = p.target_url || data.intent?.target_url || target.url;
+          const targetLabel = p.target_label || data.intent?.target_label || target.label;
+
+          if (p.tier_level === 1) {
+            showInPageAwarenessBanner(data.intent?.goal_text, window.location.hostname, data.drift?.distraction_streak_seconds || streakSeconds, targetUrl, targetLabel);
+          } else {
+            showInPageInterventionModal({
+              headline: p.headline,
+              message: p.message,
+              rationale: p.rationale,
+              tier_level: p.tier_level,
+              risk_score: p.risk_score,
+              goal_text: data.intent?.goal_text,
+              target_url: targetUrl,
+              target_label: targetLabel
+            });
+          }
+          return;
+        }
+      }
+    } catch {}
+
+    // Standalone / Offline fallback logic:
+    // If backend is unreachable, still provide progressive 2.0 adaptive experience:
+    isPageProductive = false;
+    streakSeconds += 1.5;
+
+    const target = getTargetGoalDestination();
+    const appName = window.location.hostname.replace("www.", "");
+    const isReels = window.location.pathname.includes("/reels") || window.location.href.includes("/shorts");
+    const isChat = ["whatsapp", "telegram", "discord", "messenger"].some(c => window.location.hostname.includes(c));
+
+    // Instant 1-Minute Freeze on Excess Distraction (Instagram, Shorts, Texting)
+    if (appName.includes("instagram") || isReels || isChat) {
+      if (streakSeconds >= 18) {
+        let rsn = "Excessive digital distraction detected (Instagram / YouTube Shorts / Unnecessary texting). As an active penalty, this tab is completely frozen for 1 minute.";
+        if (isReels) rsn = "Excessive distraction detected: YouTube Shorts / Instagram Reels watched during focus session. 1-Minute Tab Freeze Penalty enforced.";
+        if (isChat) rsn = "Excessive distraction detected: Unnecessary messaging / texting during focus session. 1-Minute Tab Freeze Penalty enforced.";
+        showInPageFreezePunishment(rsn, 60);
+        return;
+      }
     }
 
-    // 10s Blocked Overlay
-    if (streakSeconds >= 10) {
-      showDomBlockedOverlay();
+    // 10s: Level 1 Awareness Banner over the distracted screen
+    if (streakSeconds >= 10 && streakSeconds < 25) {
+      showInPageAwarenessBanner(currentSession.intent?.goal_text || "Focus Session", appName, Math.round(streakSeconds), target.url, target.label);
     }
-  }, 1000);
 
-  // Immediate re-evaluation on tab switch & in-page navigation
+    // 25s: Level 2/3 AI Contextual Intervention Modal over the distracted screen
+    if (streakSeconds >= 25 && streakSeconds < 75) {
+      let headline = "Mind Mirror: Remember Why You Started";
+      let msg = `You've spent over ${Math.round(streakSeconds)}s on ${appName}. You chose this session for a reason. Let's switch right now.`;
+      if (isReels) {
+        headline = "Mind Mirror: That Reel Won't Help You";
+        msg = `Deep down, you know one reel turns into 45 minutes of regret. Let's teleport straight to ${target.label} right now.`;
+      } else if (isChat) {
+        headline = "Mind Mirror: Can This Chat Wait?";
+        msg = `Replying right now breaks your flow state. These messages will still be here when you finish. Let's switch back to ${target.label}.`;
+      }
+
+      showInPageInterventionModal({
+        headline: headline,
+        message: msg,
+        rationale: "Mind mirror prompt: Distraction diverges from declared focus goal.",
+        tier_level: 2,
+        risk_score: 65,
+        goal_text: currentSession.intent?.goal_text || "Focus Session",
+        target_url: target.url,
+        target_label: target.label
+      });
+    }
+
+    // 75s+: Level 4 Focus Lock Restriction Shield
+    if (streakSeconds >= 75) {
+      showInPageRestrictionShield();
+    }
+  }
+
+  // Active Tab Periodic Loop (every 1.5 seconds)
+  setInterval(() => {
+    if (document.hidden || isGoalPaused()) {
+      return;
+    }
+    evaluatePage();
+  }, 1500);
+
+  // Tab visibility switch & SPA navigation triggers
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
-      // Tab became active! Force re-evaluation of this tab immediately
-      lastCheckedHref = "";
       evaluatePage();
     }
   });
 
   window.addEventListener("yt-navigate-finish", () => {
-    lastCheckedHref = "";
     evaluatePage();
   });
 
   window.addEventListener("popstate", () => {
-    lastCheckedHref = "";
     evaluatePage();
   });
 
-  // Listen for broadcasted CLEAR_EVERY_ACTION across tabs
-  try {
-    chrome.runtime?.onMessage?.addListener((msg, sender, sendResponse) => {
-      if (msg && (msg.action === "CLEAR_EVERY_ACTION" || msg.type === "CLEAR_EVERY_ACTION")) {
-        clearEveryAction(false);
-        sendResponse({ success: true });
-      }
-    });
-  } catch (e) {}
-
-  // Global hotkey: Alt + Shift + C or Alt + Shift + X clears every action immediately
+  // Global Emergency Hotkey: Alt + Shift + C clears all in-page restrictions
   window.addEventListener("keydown", (e) => {
     if (e.altKey && e.shiftKey && (e.code === "KeyC" || e.code === "KeyX")) {
       e.preventDefault();
-      clearEveryAction(true);
+      dismissAllDomHud();
+      goalPausedUntil = Date.now() + 60000;
+      showToast("🧹 Focus Guard in-page restrictions cleared!");
     }
   });
+
+  console.log("[Focus Guard 2.0] In-page adaptive intervention shield active.");
 })();

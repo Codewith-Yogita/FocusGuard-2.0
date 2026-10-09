@@ -60,6 +60,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for asynchronous response
   }
 
+  // Teleport to Goal: Opens productive target tab and closes the distracting tab
+  if (message.action === "TELEPORT_TO_GOAL") {
+    const targetUrl = message.url || "https://leetcode.com/problemset/all/";
+    const senderTabId = sender?.tab?.id;
+    chrome.tabs.create({ url: targetUrl, active: true }, (newTab) => {
+      if (message.closeTab && senderTabId) {
+        try {
+          chrome.tabs.remove(senderTabId);
+        } catch (e) {}
+      }
+    });
+    sendResponse({ success: true, targetUrl });
+    return false;
+  }
+
   sendResponse({ received: true });
   return false;
 });

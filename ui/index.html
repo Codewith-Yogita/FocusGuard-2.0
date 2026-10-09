@@ -42,10 +42,57 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
           <span>Insights</span>
         </button>
+        <button id="nav-btn-architecture" class="nav-btn" onclick="switchTab('architecture')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <span>v1 Foundation vs 2.0</span>
+        </button>
       </nav>
 
-      <!-- Status Indicators -->
-      <div class="header-status-group">
+      <!-- Status Indicators & Who's Watching -->
+      <div class="header-status-group" style="position: relative;">
+        <!-- User Presence & Profile Widget -->
+        <div class="user-presence-pill" id="userPresencePill" onclick="toggleUserDropdown()" title="Click to manage user profile and face presence">
+          <div class="presence-avatar" id="userAvatarText">ES</div>
+          <div class="presence-info">
+            <span class="presence-user-name" id="headerUserName">Eshan</span>
+            <span class="presence-status-label" id="headerPresenceStatus">🟢 Watching (Active)</span>
+          </div>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+
+        <!-- User Profile Dropdown Menu -->
+        <div id="userProfileDropdown" class="user-dropdown-menu" style="display: none;">
+          <div class="dropdown-header">
+            <strong style="color: #fff; font-size: 0.85rem;">Who is Watching?</strong>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Biometric User Profile & Presence</span>
+          </div>
+          <div class="dropdown-user-option active" id="userOptionEshan" onclick="switchUserProfile('Eshan')">
+            <div class="avatar-sm">ES</div>
+            <div>
+              <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Eshan (Active Profile)</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted);">Instagram / Shorts / WhatsApp restricted</div>
+            </div>
+          </div>
+          <div class="dropdown-user-option" id="userOptionYogita" onclick="switchUserProfile('Yogita')">
+            <div class="avatar-sm">YO</div>
+            <div>
+              <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Yogita</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted);">Instagram / Snapchat / Shorts restricted</div>
+            </div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <div style="padding: 0.6rem 0.85rem; display: flex; flex-direction: column; gap: 0.45rem;">
+            <button class="btn-action primary" style="font-size: 0.75rem; padding: 0.45rem; justify-content: center;" onclick="openFaceScannerModal()">
+              📷 Scan Face Camera / Verify
+            </button>
+            <div style="display: flex; gap: 0.3rem;">
+              <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem;" onclick="simulatePresence('USER_WATCHING')">👤 User</button>
+              <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem;" onclick="simulatePresence('GUEST_WATCHING')">👥 Guest</button>
+              <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem;" onclick="simulatePresence('AWAY')">🚶 Away</button>
+            </div>
+          </div>
+        </div>
+
         <div id="telemetryBadge" class="telemetry-badge" title="Live telemetry source">
           <span id="telemetryDot" class="dot-indicator"></span>
           <span id="telemetrySourceText">LIVE WIN32</span>
@@ -59,7 +106,7 @@
     <div class="demo-title-group">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       <strong>Judge Demo Simulator:</strong>
-      <span style="color: var(--text-secondary); font-size: 0.75rem;">(Demonstrates canonical Attention Drift & AI intervention arc)</span>
+      <span style="color: var(--text-secondary); font-size: 0.75rem;">(Demonstrates Attention Drift, 1-Min Freeze Punishment & Biometrics)</span>
     </div>
     <div class="demo-steps-group">
       <button class="demo-step-btn" onclick="triggerSimulatorStep(1)">1. Study Lecture (Aligned)</button>
@@ -67,6 +114,8 @@
       <button class="demo-step-btn" onclick="triggerSimulatorStep(3)">3. YouTube Shorts (Mild Drift)</button>
       <button class="demo-step-btn" onclick="triggerSimulatorStep(4)">4. Instagram Reels (Moderate Drift)</button>
       <button class="demo-step-btn" onclick="triggerSimulatorStep(5)">5. Repeated Diversion (Acute)</button>
+      <button class="demo-step-btn" onclick="triggerSimulatorStep(6)">6. WhatsApp Chat (Flow Break)</button>
+      <button class="demo-step-btn" onclick="triggerSimulatorStep(7)" style="border-color: rgba(56, 189, 248, 0.4); color: #38bdf8; font-weight: 700;" title="Triggers 1-minute frozen tab lockout for excess distraction">7. Excess Distraction ➔ 1-Min Freeze 🥶</button>
       <button class="demo-auto-btn" onclick="runAutoJudgeDemo()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         <span>Run 60s Demo Arc</span>
@@ -80,6 +129,51 @@
 
     <!-- TAB 1: FOCUS SESSION -->
     <div id="tab-focus" class="tab-pane active">
+
+      <!-- 1-Minute Tab Freeze Punishment Banner (Shown when excess distraction triggers freeze) -->
+      <div id="freezePunishmentBanner" class="freeze-punishment-banner" style="display: none;">
+        <div class="freeze-banner-grid">
+          <div style="flex: 1; min-width: 280px;">
+            <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(56, 189, 248, 0.2); border:1px solid rgba(56, 189, 248, 0.5); color:#38bdf8; border-radius:999px; padding:3px 12px; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px;">
+              <span>🥶 ACTIVE PUNISHMENT — TAB FROZEN FOR 1 MINUTE</span>
+            </div>
+            <h3 style="font-size: 1.25rem; font-weight: 800; color: #ffffff; margin-bottom: 4px;">
+              Excess Distraction Penalty Enforced
+            </h3>
+            <p id="freezeBannerReasonText" style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.45; margin-bottom: 12px;">
+              Excessive distraction detected (Instagram / YouTube Shorts / Unnecessary texting). Target tab is completely locked and frozen for 1 minute.
+            </p>
+            <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+              <button class="btn-action primary" style="background: linear-gradient(135deg, #0284c7, #2563eb); font-size: 0.8rem; padding: 0.45rem 1rem;" onclick="teleportToGoalFromFreeze()">
+                <span>🚀 Teleport to Goal Workspace (End Punishment Early)</span>
+              </button>
+              <button class="btn-action" style="font-size: 0.8rem; padding: 0.45rem 0.9rem; border-color: rgba(56, 189, 248, 0.5); color: #38bdf8;" onclick="openFrozenScreenDemoModal()">
+                <span>👁️ Preview Frozen Tab Screen</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="freeze-timer-box">
+            <span class="freeze-timer-label">FREEZE PENALTY</span>
+            <div id="freezeBannerTimer" class="freeze-timer-digits">01:00</div>
+            <span style="font-size: 0.68rem; color: #64748b; margin-top: 2px;">COUNTDOWN ACTIVE</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Guest Presence Alert Banner -->
+      <div id="guestAlertBanner" class="guest-alert-banner" style="display: none;">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span style="font-size: 1.2rem;">👥</span>
+          <div>
+            <strong>Guest Detected in Front of Screen:</strong>
+            <span style="margin-left: 0.35rem; color: #fef3c7;">Non-enrolled face detected. Focus restrictions automatically paused to avoid blocking guest.</span>
+          </div>
+        </div>
+        <button class="btn-chip" style="background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #fff;" onclick="switchUserProfile('Eshan')">
+          Restore Eshan's Focus Rules
+        </button>
+      </div>
 
       <!-- State A: Intent Onboarding Card (shown when session is IDLE) -->
       <div id="intentOnboardingCard" class="focus-hero-card">
@@ -103,6 +197,21 @@
         <div style="margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.75rem;">
           <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">Custom Goal Description</label>
           <input type="text" id="goalTextInput" class="input-text" placeholder="e.g., Prepare for my Data Structures exam" value="Prepare for my Data Structures exam">
+        </div>
+
+        <!-- Productive Target Resource (Auto-opened when teleworking to goal) -->
+        <div style="margin: 0.5rem 0 1.25rem 0; display: flex; flex-direction: column; gap: 0.5rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">Productive Goal Resource (Auto-opened when returning to goal)</label>
+            <span id="targetResourceHint" style="font-size: 0.72rem; color: #38bdf8; font-family: var(--font-mono);">Striver DSA Lecture (YouTube)</span>
+          </div>
+          <input type="text" id="targetUrlInput" class="input-text" placeholder="https://..." value="https://www.youtube.com/results?search_query=dsa+trees+lecture+striver">
+          <div class="preset-destinations" style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.25rem;">
+            <button type="button" class="btn-chip" onclick="setDestinationPreset('https://www.youtube.com/results?search_query=dsa+trees+lecture+striver', 'Striver DSA Trees (YouTube)')">📺 Striver DSA Lecture</button>
+            <button type="button" class="btn-chip" onclick="setDestinationPreset('https://leetcode.com/problemset/all/', 'LeetCode Problemset')">💻 LeetCode Practice</button>
+            <button type="button" class="btn-chip" onclick="setDestinationPreset('https://takeuforward.org/strivers-a2z-dsa-course/strivers-a2z-dsa-course-sheet-2/', 'Striver A2Z DSA Sheet')">📋 Striver A2Z Sheet</button>
+            <button type="button" class="btn-chip" onclick="setDestinationPreset('https://docs.google.com', 'Google Docs Workspace')">📝 Google Docs</button>
+          </div>
         </div>
 
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem;">
@@ -132,11 +241,14 @@
             </div>
             <h2 id="activeGoalHeading" class="intent-headline">Prepare for my Data Structures exam</h2>
             <p id="activeActivityDesc" class="intent-subtext">Active: Striver DSA Trees Lecture — Aligned with study goal.</p>
-            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
               <button class="btn-action" style="font-size: 0.75rem; padding: 0.35rem 0.8rem;" onclick="stopFocusSession()">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
                 <span>End Session</span>
               </button>
+              <a id="activeTargetResourceLink" href="https://www.youtube.com/results?search_query=dsa+trees+lecture+striver" target="_blank" class="btn-action primary" style="font-size: 0.75rem; padding: 0.35rem 0.8rem; text-decoration: none;">
+                <span>🚀 Open Goal Workspace</span>
+              </a>
             </div>
           </div>
 
@@ -149,18 +261,22 @@
 
       <!-- State C: Session Completed Card -->
       <div id="sessionCompletedCard" class="focus-hero-card flow-glow" style="display: none; text-align: center;">
-        <div style="max-width: 500px; margin: 0 auto;">
-          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎉</div>
-          <h2 class="intent-headline" style="color: #10b981;">Focus Session Completed!</h2>
-          <p id="completedSummaryText" class="intent-subtext" style="margin: 0.5rem auto 1.5rem;">You completed 25 minutes of deep attention protection for your declared goal.</p>
+        <div style="max-width: 540px; margin: 0 auto;">
+          <div id="completedIconDisplay" style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎉</div>
+          <h2 id="completedHeadline" class="intent-headline" style="color: #10b981;">Focus Session Completed!</h2>
+          <p id="completedSummaryText" class="intent-subtext" style="margin: 0.5rem auto 1.5rem;">Session summary.</p>
           <div class="dashboard-grid" style="margin-bottom: 1.5rem;">
             <div class="stat-card" style="padding: 0.8rem; text-align: center;">
-              <span class="stat-title">COMPLETED INTENT</span>
+              <span class="stat-title">DECLARED INTENT</span>
               <div id="completedGoalDisplay" style="font-weight: 700; font-size: 0.95rem; margin-top: 0.3rem;">Study DSA</div>
             </div>
             <div class="stat-card" style="padding: 0.8rem; text-align: center;">
-              <span class="stat-title">RECOVERY STATUS</span>
-              <div style="font-weight: 700; font-size: 0.95rem; color: #10b981; margin-top: 0.3rem;">Flow Preserved</div>
+              <span class="stat-title">SESSION VERDICT</span>
+              <div id="completedRecoveryStatus" style="font-weight: 700; font-size: 0.95rem; color: #10b981; margin-top: 0.3rem;">Flow Preserved</div>
+            </div>
+            <div class="stat-card" style="padding: 0.8rem; text-align: center; grid-column: span 2;">
+              <span class="stat-title">DIGITAL ATTENTION BREAKDOWN</span>
+              <div id="completedBreakdownDisplay" style="font-weight: 600; font-size: 0.85rem; color: #cbd5e1; margin-top: 0.3rem;">Productive: 25m | Distracted: 0m</div>
             </div>
           </div>
           <button class="btn-start-focus" onclick="resetToNewSession()">
@@ -339,6 +455,226 @@
       </div>
     </div>
 
+    <!-- TAB 4: SYSTEM ARCHITECTURE & V1 FOUNDATION MATRIX -->
+    <div id="tab-architecture" class="tab-pane">
+      
+      <!-- Evolution Overview Hero -->
+      <div class="focus-hero-card" style="margin-bottom: 1.5rem;">
+        <div class="intent-eyebrow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <span>System Evolution & ForgeHacks Architecture</span>
+        </div>
+        <h2 class="intent-headline">Focus Guard v1 Foundation ➔ 2.0 Adaptive Assistant</h2>
+        <p class="intent-subtext">
+          Focus Guard v1 already had the system restriction daemon, local biometric security, and extension DOM shield.
+          Focus Guard 2.0 elevates this foundation from a rigid <em>"block and lock"</em> tool into an <strong>Adaptive Digital-Wellbeing Assistant</strong>
+          that reasons about intent, context, and attention drift.
+        </p>
+
+        <!-- 7-Stage Core Product Loop Pipeline -->
+        <div style="margin-top: 1.5rem; background: rgba(0,0,0,0.35); padding: 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 0.75rem;">
+            The 7-Stage Focus Guard 2.0 Adaptive Loop:
+          </div>
+          <div class="loop-pipeline-grid">
+            <div class="loop-step-card">
+              <span class="loop-step-num">01</span>
+              <strong>User Intent</strong>
+              <p>Category & goal declaration as ground truth benchmark</p>
+            </div>
+            <div class="loop-step-card">
+              <span class="loop-step-num">02</span>
+              <strong>Multi-Signal Telemetry</strong>
+              <p>Win32 window polling + extension + switching velocity</p>
+            </div>
+            <div class="loop-step-card">
+              <span class="loop-step-num">03</span>
+              <strong>Attention Drift</strong>
+              <p>Trajectory evaluation (Nominal ➔ Mild ➔ Mod ➔ Acute)</p>
+            </div>
+            <div class="loop-step-card">
+              <span class="loop-step-num">04</span>
+              <strong>Context Reasoning</strong>
+              <p>Explainable 0–100% Risk Score breakdown</p>
+            </div>
+            <div class="loop-step-card">
+              <span class="loop-step-num">05</span>
+              <strong>AI Recommendation</strong>
+              <p>Hybrid Groq LLM + Deterministic offline fallback</p>
+            </div>
+            <div class="loop-step-card">
+              <span class="loop-step-num">06</span>
+              <strong>Adaptive Intervention</strong>
+              <p>5-tier hierarchy ("Suggestion first, restriction later")</p>
+            </div>
+            <div class="loop-step-card">
+              <span class="loop-step-num">07</span>
+              <strong>Personalize & Learn</strong>
+              <p>3m verification & empirical efficacy learning</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Side-by-Side Paradigm Shift Comparison -->
+      <div class="comparison-grid" style="margin-bottom: 1.5rem;">
+        
+        <!-- Column 1: v1 Foundation Engine -->
+        <div class="comparison-card v1-side">
+          <div class="comparison-badge v1">FOCUS GUARD v1 — FOUNDATION</div>
+          <h3 style="font-size: 1.25rem; font-weight: 700; margin-top: 0.5rem; color: #f87171;">Binary Restriction Engine</h3>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            The original enforcement suite providing hardware inspection, local biometrics, and blocking.
+          </p>
+
+          <div class="comparison-mechanic">
+            <span style="font-size: 0.75rem; text-transform: uppercase; color: #f87171; font-weight: 600;">Core Rule:</span>
+            <div style="font-family: var(--font-mono); font-size: 0.85rem; color: #fca5a5; margin-top: 0.25rem;">
+              "Distracting App Detected ➔ Minimize / Block Immediately"
+            </div>
+          </div>
+
+          <ul class="comparison-list">
+            <li>
+              <span class="cross-icon">✕</span>
+              <span><strong>Static Binary Rules:</strong> Apps are either 100% allowed or 100% blocked in <code>policies.json</code>.</span>
+            </li>
+            <li>
+              <span class="cross-icon">✕</span>
+              <span><strong>Zero Context:</strong> Cannot distinguish a 2-hour DSA lecture from algorithmic Shorts on YouTube.</span>
+            </li>
+            <li>
+              <span class="cross-icon">✕</span>
+              <span><strong>Purely Punitive:</strong> Imposes lockout or window minimization without helping the user refocus.</span>
+            </li>
+            <li>
+              <span class="cross-icon">✕</span>
+              <span><strong>No Memory or Learning:</strong> Repeats the identical block action regardless of past responses.</span>
+            </li>
+            <li>
+              <span class="check-icon" style="color: #94a3b8;">✓</span>
+              <span><strong>Role in 2.0:</strong> Remains the trusted <em>Level 4 enforcement backend</em> when adaptive interventions are exhausted.</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Column 2: 2.0 Adaptive Assistant -->
+        <div class="comparison-card v2-side">
+          <div class="comparison-badge v2">FOCUS GUARD 2.0 — FORGEHACKS</div>
+          <h3 style="font-size: 1.25rem; font-weight: 700; margin-top: 0.5rem; color: #10b981;">Adaptive Wellbeing Assistant</h3>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            An intelligent cognition plane that reasons about intent, detects drift, and guides recovery.
+          </p>
+
+          <div class="comparison-mechanic">
+            <span style="font-size: 0.75rem; text-transform: uppercase; color: #10b981; font-weight: 600;">Core Rule:</span>
+            <div style="font-family: var(--font-mono); font-size: 0.85rem; color: #6ee7b7; margin-top: 0.25rem;">
+              "Understand Intent ➔ Detect Drift ➔ Suggest Reset ➔ Restrict Only If Needed"
+            </div>
+          </div>
+
+          <ul class="comparison-list">
+            <li>
+              <span class="check-icon">✓</span>
+              <span><strong>User Intent Ground Truth:</strong> Compares active window titles against user's declared focus goal.</span>
+            </li>
+            <li>
+              <span class="check-icon">✓</span>
+              <span><strong>Contextual Nuance:</strong> YouTube DSA lecture is <code>ALIGNED</code>; YouTube Shorts triggers <code>DRIFT</code>.</span>
+            </li>
+            <li>
+              <span class="check-icon">✓</span>
+              <span><strong>Transparent Risk Score:</strong> 0–100% score with clear points for duration, switching, and repetition.</span>
+            </li>
+            <li>
+              <span class="check-icon">✓</span>
+              <span><strong>5-Tier Progressive Escalation:</strong> Suggestion first (Awareness ➔ Reset), restriction later (Level 4).</span>
+            </li>
+            <li>
+              <span class="check-icon">✓</span>
+              <span><strong>Learned Personalization:</strong> Tracks whether you recovered in 3m and adapts future recommendations.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Concrete Canonical Example Comparison -->
+      <div class="focus-hero-card" style="margin-bottom: 1.5rem; border-color: rgba(99, 102, 241, 0.3);">
+        <div style="font-size: 0.75rem; text-transform: uppercase; color: #a5b4fc; font-weight: 600; margin-bottom: 0.5rem;">
+          Concrete Scenario: User declared intent "Study for 45 minutes (Data Structures)"
+        </div>
+        <div class="example-split-grid">
+          <div class="example-box v1">
+            <span class="example-label" style="color: #f87171;">v1 Handling:</span>
+            <div class="example-text">
+              User opens Instagram / Shorts.<br>
+              ➔ <strong>"Instagram detected ➔ Block Instagram immediately."</strong><br>
+              <em>(Immediate lockout countdown, no context reasoning, user feels restricted rather than helped).</em>
+            </div>
+          </div>
+          <div class="example-box v2">
+            <span class="example-label" style="color: #10b981;">Focus Guard 2.0 Handling:</span>
+            <div class="example-text">
+              User opens Instagram / Shorts repeatedly.<br>
+              ➔ <strong>"Intended: Study 45m | Behavior: Opened Reels repeatedly | Detected: Attention Drift | Action: Suggest 3m guided breath reset | Outcome: Verified successful focus recovery!"</strong><br>
+              <em>(Progressive, explainable, and empowers the user to regain cognitive control).</em>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Foundation Services Status Grid -->
+      <div>
+        <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Underlying v1 Foundation Services:</h3>
+        <div class="dashboard-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">WIN32 MONITOR & MINIMIZER</span>
+              <span class="stat-badge good">OPERATIONAL</span>
+            </div>
+            <div style="font-size: 0.95rem; font-weight: 600; margin-top: 0.35rem;">Win32 API Bridge</div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+              Foreground window HWND polling via ctypes. Executes ShowWindow(SW_MINIMIZE) on Level 4 restriction.
+            </p>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">LOCAL BIOMETRIC ENGINE</span>
+              <span class="stat-badge info">DPAPI / ONNX</span>
+            </div>
+            <div style="font-size: 0.95rem; font-weight: 600; margin-top: 0.35rem;">YuNet + SFace / PIN</div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+              Local hardware-bound biometric authentication and presence verification from original Focus Guard suite.
+            </p>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">STATIC POLICIES MATRIX</span>
+              <span class="stat-badge good">5 RULES LOADED</span>
+            </div>
+            <div style="font-size: 0.95rem; font-weight: 600; margin-top: 0.35rem;">policies.json</div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+              Provides baseline application and domain boundaries, now evaluated with contextual intent nuance.
+            </p>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">BROWSER EXTENSION BRIDGE</span>
+              <span class="stat-badge good">ACTIVE PORT 8000</span>
+            </div>
+            <div style="font-size: 0.95rem; font-weight: 600; margin-top: 0.35rem;">MV3 In-Page HUD</div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+              Confined DOM overlay, video pausing, and live HTTP telemetry bridge on restricted browser tabs.
+            </p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
   </main>
 
   <!-- Interactive Guided 3-Minute Breath Reset Screen -->
@@ -357,6 +693,123 @@
       <button class="btn-action primary" style="margin: 0 auto;" onclick="closeBreathReset()">
         <span>Complete Reset & Return to Focus</span>
       </button>
+    </div>
+  </div>
+
+  <!-- Interactive Fullscreen Frozen Tab Simulation Screen (Demonstrates 1-Minute Freeze Punishment) -->
+  <div id="frozenScreenModal" class="frozen-screen-overlay" style="display: none;">
+    <div class="frozen-screen-card">
+      <div style="position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #38bdf8, #818cf8, #38bdf8);"></div>
+      
+      <div style="
+        width: 70px;
+        height: 70px;
+        margin: 0 auto 16px;
+        border-radius: 24px;
+        background: rgba(56, 189, 248, 0.15);
+        border: 1px solid rgba(56, 189, 248, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 34px;
+        box-shadow: 0 0 30px rgba(56, 189, 248, 0.35);
+      ">🥶</div>
+
+      <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(56, 189, 248, 0.15); border:1px solid rgba(56, 189, 248, 0.4); color:#38bdf8; border-radius:999px; padding:4px 14px; font-size:11px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:12px;">
+        <span>❄️ 1-Minute Tab Freeze Penalty Active</span>
+      </div>
+
+      <h2 style="font-size: 24px; font-weight: 800; margin: 4px 0 10px; color: #ffffff; letter-spacing:-0.02em;">
+        Tab Completely Frozen
+      </h2>
+
+      <p id="frozenModalReason" style="font-size: 13.5px; color: #94a3b8; line-height: 1.55; margin-bottom: 22px;">
+        Excessive digital distraction detected (Instagram Reels / YouTube Shorts / Unnecessary texting). As an active penalty, you cannot use this tab for 1 minute.
+      </p>
+
+      <div style="
+        background: rgba(2, 6, 23, 0.75);
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        border-radius: 18px;
+        padding: 18px 24px;
+        margin-bottom: 24px;
+      ">
+        <div style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px;">
+          Lockout Penalty Countdown
+        </div>
+        <div id="frozenModalCountdown" style="
+          font-size: 46px;
+          font-weight: 800;
+          color: #38bdf8;
+          font-family: var(--font-mono);
+          letter-spacing: 2px;
+          text-shadow: 0 0 25px rgba(56, 189, 248, 0.55);
+        ">
+          01:00
+        </div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+          Tab automatically unlocks when penalty expires
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <button class="btn-action primary" style="justify-content:center; padding:12px !important; font-size:13.5px !important; background:linear-gradient(135deg, #0284c7, #2563eb) !important; box-shadow:0 4px 20px rgba(2, 132, 199, 0.45) !important;" onclick="teleportToGoalFromFreeze()">
+          <span>🚀 Teleport to Goal Workspace (End Penalty & Resume Focus)</span>
+        </button>
+        <button class="btn-action" style="justify-content:center; padding:9px !important; font-size:12px !important;" onclick="closeFrozenScreenDemoModal()">
+          <span>Close Preview Overlay</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Face Biometrics & Who's Watching Scanner Modal -->
+  <div id="faceScannerModal" class="face-scanner-overlay" style="display: none;">
+    <div class="face-scanner-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="presence-avatar" id="modalScannerAvatar">ES</div>
+          <div style="text-align:left;">
+            <div style="font-weight:700; font-size:0.95rem; color:#fff;">Biometric Face Scanner</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);">Who is watching screen?</div>
+          </div>
+        </div>
+        <button class="btn-chip" onclick="closeFaceScannerModal()" style="padding:0.25rem 0.6rem;">✕</button>
+      </div>
+
+      <div class="webcam-viewport" id="webcamViewport">
+        <video id="scannerVideo" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; display:none;"></video>
+        <div class="scanning-reticle" id="scannerReticle">
+          <div style="font-size:10px; color:#38bdf8; font-weight:700; text-transform:uppercase; letter-spacing:1px; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:4px;">
+            Scanning Face
+          </div>
+        </div>
+        <div id="scannerSimulationFeed" style="display:flex; flex-direction:column; align-items:center; gap:8px; z-index:1;">
+          <div style="font-size:42px;">📷</div>
+          <div style="font-size:0.8rem; color:#94a3b8;">Local Facial Biometric Pipeline</div>
+        </div>
+      </div>
+
+      <!-- Verdict card -->
+      <div id="scannerVerdictCard" style="background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:12px; padding:12px; margin-bottom:16px;">
+        <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Recognition Verdict</div>
+        <div id="scannerVerdictText" style="font-weight:700; font-size:1.05rem; color:#10b981;">👤 User Verified: Eshan (95% Match)</div>
+        <div id="scannerVerdictSubtext" style="font-size:0.75rem; color:#94a3b8; margin-top:3px;">
+          Enrolled owner active. Personal focus limits and 1-minute freeze penalty enabled.
+        </div>
+      </div>
+
+      <!-- Test simulation actions -->
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button id="btnStartWebcam" class="btn-action primary" style="justify-content:center; padding:10px;" onclick="startWebcamCapture()">
+          <span>🎥 Turn On Webcam Face Scanner</span>
+        </button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('USER_WATCHING'); setScannerVerdict('USER_WATCHING');">👤 User (Eshan)</button>
+          <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('GUEST_WATCHING'); setScannerVerdict('GUEST_WATCHING');">👥 Guest</button>
+          <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('AWAY'); setScannerVerdict('AWAY');">🚶 Away</button>
+        </div>
+      </div>
     </div>
   </div>
 

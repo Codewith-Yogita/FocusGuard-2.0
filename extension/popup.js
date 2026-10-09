@@ -20,6 +20,37 @@ async function fetchStatus() {
     connEl.textContent = "Online";
     connEl.style.color = "#10b981";
 
+    // Who's Watching
+    const watchingEl = document.getElementById("watching-status");
+    if (watchingEl && data.who_is_watching) {
+      const w = data.who_is_watching;
+      if (w.is_guest) {
+        watchingEl.textContent = "👥 Guest Detected (Paused)";
+        watchingEl.className = "val val-warn";
+      } else if (w.status === "AWAY") {
+        watchingEl.textContent = "⚪ User Away (No Face)";
+        watchingEl.className = "val";
+      } else {
+        watchingEl.textContent = `👤 ${w.user_id || "User"} (Watching)`;
+        watchingEl.className = "val val-good";
+      }
+    }
+
+    // Freeze Penalty Row
+    const freezeRow = document.getElementById("freeze-row");
+    const freezeStatus = document.getElementById("freeze-status");
+    if (freezeRow && freezeStatus && data.freeze_punishment) {
+      if (data.freeze_punishment.active) {
+        freezeRow.style.display = "flex";
+        const rem = data.freeze_punishment.remaining_seconds || 60;
+        const m = Math.floor(rem / 60).toString().padStart(2, "0");
+        const s = (rem % 60).toString().padStart(2, "0");
+        freezeStatus.textContent = `${m}:${s} Active`;
+      } else {
+        freezeRow.style.display = "none";
+      }
+    }
+
     // Intent
     if (data.intent) {
       goalEl.textContent = `${data.intent.category_label || "Goal"}: "${data.intent.goal_text}"`;
@@ -68,6 +99,21 @@ async function fetchStatus() {
     goalEl.textContent = "Ensure 'python ui/server.py 8000' is running.";
   }
 }
+
+document.getElementById("freeze-demo-btn")?.addEventListener("click", async () => {
+  try {
+    await fetch(`${SERVER_URL}/api/v2/punishment/freeze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        app_name: "Instagram / Shorts / Texting",
+        reason: "Excessive distraction detected (Instagram Reels / YouTube Shorts / Social texting). 1-Minute Tab Freeze Penalty enforced.",
+        duration_seconds: 60
+      })
+    });
+    fetchStatus();
+  } catch {}
+});
 
 document.getElementById("breath-reset-btn")?.addEventListener("click", async () => {
   try {

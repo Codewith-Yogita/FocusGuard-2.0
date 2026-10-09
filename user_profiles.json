@@ -1,7 +1,57 @@
 {
-  "currentUser": "Yogita",
+  "currentUser": "Eshan",
   "focusSessionActive": false,
   "users": {
+    "Eshan": [
+      {
+        "application": "Instagram",
+        "mode": "BLOCK",
+        "maxDurationSeconds": 60,
+        "cooldownSeconds": 3600,
+        "icon": "camera",
+        "description": "Completely restricted application. Triggers 1-minute tab freeze punishment upon excess distraction."
+      },
+      {
+        "application": "YouTube Shorts",
+        "mode": "BLOCK",
+        "maxDurationSeconds": 60,
+        "cooldownSeconds": 3600,
+        "icon": "play",
+        "description": "Shorts feed restricted. Triggers 1-minute tab freeze punishment upon excess distraction."
+      },
+      {
+        "application": "WhatsApp & Texting",
+        "mode": "BLOCK",
+        "maxDurationSeconds": 60,
+        "cooldownSeconds": 3600,
+        "icon": "message-circle",
+        "description": "Unnecessary messaging (WhatsApp, Telegram, Discord). Triggers 1-minute tab freeze punishment."
+      },
+      {
+        "application": "VS Code",
+        "mode": "ALLOW",
+        "maxDurationSeconds": 0,
+        "cooldownSeconds": 0,
+        "icon": "code-2",
+        "description": "Whitelisted primary coding environment. Always classified as productive."
+      },
+      {
+        "application": "LeetCode / Docs",
+        "mode": "ALLOW",
+        "maxDurationSeconds": 0,
+        "cooldownSeconds": 0,
+        "icon": "globe",
+        "description": "Coding algorithms and study documentation. Always classified as productive."
+      },
+      {
+        "application": "Reddit",
+        "mode": "BLOCK",
+        "maxDurationSeconds": 60,
+        "cooldownSeconds": 1800,
+        "icon": "globe",
+        "description": "Social media forum feed. Restricted during focus sessions."
+      }
+    ],
     "Yogita": [
       {
         "application": "Instagram",
@@ -9,7 +59,7 @@
         "maxDurationSeconds": 60,
         "cooldownSeconds": 3600,
         "icon": "camera",
-        "description": "Completely restricted application. Triggers immediate lockout countdown upon detection."
+        "description": "Completely restricted application. Triggers immediate 1-minute tab freeze upon detection."
       },
       {
         "application": "Snapchat",
@@ -25,7 +75,7 @@
         "maxDurationSeconds": 60,
         "cooldownSeconds": 3600,
         "icon": "play",
-        "description": "Content-Aware: YouTube Shorts are strictly restricted, while DSA, C++, and lectures remain allowed."
+        "description": "Content-Aware: YouTube Shorts are strictly restricted (1-min freeze), while DSA lectures remain allowed."
       },
       {
         "application": "VS Code",

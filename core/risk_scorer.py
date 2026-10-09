@@ -61,9 +61,9 @@ class RiskScorer:
         if switches_5m >= 3:
             switching_pts = min(18, (switches_5m - 2) * 4)
 
-        # 4. Repetition Penalty (0 to 20 pts)
+        # 4. Repetition Penalty (0 to 35 pts)
         # If user previously drifted and returned to distraction in the same session
-        repetition_pts = min(20, max(0, (repeated_diversions - 1) * 8))
+        repetition_pts = min(35, max(0, repeated_diversions * 15))
 
         # 5. Recovery Credit (0 to -25 pts)
         # If user is currently aligned, subtract risk rapidly

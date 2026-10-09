@@ -115,6 +115,24 @@ class BehaviorMonitor:
                 "source": "REAL_WIN32_RECOVERY"
             }
 
+    def minimize_current_distracting_window(self) -> bool:
+        """
+        Foundation v1 Escalation Bridge:
+        Invokes Win32 ShowWindow(SW_MINIMIZE) when Focus Guard 2.0 reaches
+        Level 4 (Restriction / Focus Lock).
+        """
+        if not IS_WINDOWS:
+            return False
+        try:
+            hwnd = user32.GetForegroundWindow()
+            if hwnd:
+                # 6 = SW_MINIMIZE
+                user32.ShowWindow(hwnd, 6)
+                return True
+        except Exception as e:
+            print(f"[Foundation Escalation] Window minimization note: {e}")
+        return False
+
     # =========================================================================
     # TELEMETRY RECORDING & SWITCH TRACKING
     # =========================================================================

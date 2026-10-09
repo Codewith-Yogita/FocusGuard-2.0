@@ -1,11 +1,27 @@
 # Focus Guard 2.0 — ForgeHacks Build Log
 
 ## Overview & Product Philosophy
-Focus Guard 2.0 evolves from an application restriction/blocking tool into an adaptive digital-wellbeing assistant. Its core tenet is:
+Focus Guard 2.0 evolves from an application restriction/blocking tool into an **adaptive digital-wellbeing assistant**. Its core tenet is:
 > *"Don't simply block distraction. Understand it, intervene intelligently, and help the user regain control of their attention."*
 
-The core feedback loop:
-`DETECT` ➔ `UNDERSTAND` ➔ `SUGGEST` ➔ `INTERVENE` ➔ `LEARN`
+### The Core Adaptive Loop
+```
+User Intent ➔ Actual Behaviour ➔ Detect Attention Drift ➔ Understand Context ➔ AI Recommendation ➔ Adaptive Intervention ➔ Learn/Personalize
+```
+
+### The Paradigm Shift (v1 Foundation vs. 2.0 Assistant)
+- **v1 Punitive Model**:
+  ❌ *"Instagram detected → block Instagram immediately"*  
+  *(Binary, zero-context, punitive lockout with no understanding of why the user drifted).*
+- **2.0 Adaptive Model**:
+  🎯 **User intended**: Study for 45 minutes  
+  🎯 **Behaviour**: Opened Instagram / Shorts repeatedly  
+  🎯 **Detected**: Attention drift (trajectory diverged from active DSA study goal)  
+  🎯 **Context**: Educational YouTube lectures are aligned; algorithmic short-form feeds trigger drift  
+  🎯 **Intervention**: 5-tier escalation — gentle awareness ➔ AI suggestion ➔ guided 3-minute breath reset ➔ restriction as last resort  
+  🎯 **Afterwards**: Learn whether that intervention worked (3-minute post-intervention verification & personalization)
+
+**Importantly, the existing v1 restriction system becomes the foundation (Level 4 enforcement backend), while the genuinely new work in 2.0 centers around intent tracking, behavior trajectory analysis, attention-drift detection, AI recommendations, context-aware interventions, and personalization.**
 
 ---
 
@@ -67,22 +83,37 @@ The core feedback loop:
 10. **Interactive 60-Second Judge Demo & Scenario Simulator**:
     - One-click verifiable demo simulating the canonical drift arc: Study ➔ YouTube Lecture ➔ YouTube Shorts ➔ Instagram ➔ AI Intervention ➔ Recovery.
 
+11. **Direct Productive Redirection ("Teleport to Goal")**:
+    - Direct launch of specific educational/coding targets (e.g., Striver DSA Trees YouTube Lecture, LeetCode Problemset, Striver A2Z Sheet).
+    - When "Return to Goal" is clicked, the extension immediately closes the distracting tab (Instagram Reels, YouTube Shorts, WhatsApp) and teleports straight to the declared goal resource.
+
+12. **Social Chatting & Messaging Detection**:
+    - Dedicated flow-interruption detection for WhatsApp Web (`web.whatsapp.com`), Discord, Telegram Web, and Messenger during study/coding sessions.
+    - Preserves cognitive continuity and working memory by actively flagging casual chat interruptions.
+
+13. **"Inner Conscience / Mind Mirror" Persona**:
+    - Focus Guard 2.0 speaks as the user's own rational inner mind ("You know 1 reel turns into 45m of regret... your exam won't wait. Let's switch right now").
+    - Replaces punitive, clinical messaging with empathetic self-awareness nudges that prompt immediate constructive action.
+
 ---
 
 ## Implementation Verification & File Inventory
 
 | Module | Path | Purpose | Verification Status |
 | :--- | :--- | :--- | :--- |
-| **Intent Engine** | `core/intent_engine.py` | Declares intent, parses goals, extracts keywords, evaluates context | Verified |
+| **Intent Engine** | `core/intent_engine.py` | Declares intent, parses goals, extracts keywords, smart destinations, evaluates context | Verified |
 | **Behavior Monitor** | `core/behavior_monitor.py` | Real Win32 window polling + extension listener + simulation layer | Verified |
 | **Drift Engine** | `core/drift_engine.py` | Multi-stage drift state machine (`NOMINAL` to `ACUTE_DRIFT`) | Verified |
 | **Risk Scorer** | `core/risk_scorer.py` | Transparent 0–100% scoring with exact factor point breakdown | Verified |
-| **AI Recommendation** | `core/ai_recommendation.py` | Hybrid Groq LLM inference with deterministic fallback | Verified |
-| **Adaptive Escalation**| `core/adaptive_intervention.py`| Governs Levels 0–4, cooldowns, snooze, breath reset, and lock | Verified |
+| **AI Recommendation** | `core/ai_recommendation.py` | Mind Mirror Conscience persona + Groq LLM + deterministic fallback | Verified |
+| **Adaptive Escalation**| `core/adaptive_intervention.py`| Governs Levels 0–4, cooldowns, repeated diversion lockout, and teleport actions | Verified |
 | **Outcome Tracker** | `core/outcome_tracker.py` | Empirical logging and 3-minute post-intervention recovery checks | Verified |
 | **Personalization** | `core/personalization.py` | Computes action efficacy rates and personalizes future interventions | Verified |
-| **REST API Server** | `ui/server.py` | Serves web dashboard and handles all `/api/v2/*` endpoints | Verified (Port 8000) |
-| **Web Dashboard** | `ui/index.html` | Minimalist calm UI with ambient focus hero, timer, & demo banner | Verified |
+| **REST API Server** | `ui/server.py` | Serves web dashboard, telemetry relay, and `/api/v2/*` endpoints | Verified (Port 8000) |
+| **Extension Content Script** | `extension/content.js` | In-page HUD over distracting feeds with instant goal teleportation | Verified |
+| **Extension Background Worker** | `extension/background.js` | Tab lifecycle management (`TELEPORT_TO_GOAL`) and mixed-content relay | Verified |
+| **Web Dashboard** | `ui/index.html` | Minimalist calm UI with destination presets, ambient hero, timer, & demo | Verified |
 | **Design System** | `ui/styles.css` | Glassmorphic dark aesthetic, breathing orb animation, custom tokens | Verified |
-| **App Controller** | `ui/app.js` | Live polling, intervention modals, breath reset, and 60s auto demo | Verified |
+| **App Controller** | `ui/app.js` | Live polling, smart teleport launch, breath reset, and 60s auto demo | Verified |
+
 

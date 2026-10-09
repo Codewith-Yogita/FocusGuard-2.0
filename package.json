@@ -1,0 +1,16 @@
+{
+  "name": "focusguard-2.0",
+  "version": "2.0.0",
+  "description": "Focus Guard 2.0 - Adaptive Digital Wellbeing Assistant",
+  "scripts": {
+    "dev": "python ui/server.py 8000",
+    "start": "python ui/server.py 8000"
+  },
+  "keywords": [
+    "focusguard",
+    "digital-wellbeing",
+    "productivity"
+  ],
+  "author": "",
+  "license": "MIT"
+}

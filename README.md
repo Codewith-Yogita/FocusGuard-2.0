@@ -10,31 +10,23 @@ Instead of immediately punishing users when they visit YouTube or social platfor
 
 ---
 
-## 🔄 Core Product Loop
+## 🔄 Core Adaptive Loop
+```
+User Intent ➔ Actual Behaviour ➔ Detect Attention Drift ➔ Understand Context ➔ AI Recommendation ➔ Adaptive Intervention ➔ Learn/Personalize
+```
 
-```
-DETECT ➔ UNDERSTAND ➔ SUGGEST ➔ INTERVENE ➔ LEARN
-```
+### 💡 The Paradigm Shift (v1 Foundation vs. 2.0 Assistant)
+- **v1 Model (Punitive Blocker)**:
+  ❌ *"Instagram detected → block Instagram immediately"*
+- **2.0 Model (Adaptive Assistant)**:
+  🎯 **User intended**: Study for 45 minutes  
+  🎯 **Behaviour**: Opened Instagram / Shorts repeatedly  
+  🎯 **Detected**: Attention drift (divergence from active DSA study goal)  
+  🎯 **Context**: Educational YouTube lectures are aligned; algorithmic short-form feeds trigger drift  
+  🎯 **Intervention**: 5-tier escalation — gentle awareness ➔ AI suggestion ➔ guided 3-minute breath reset ➔ restriction as last resort  
+  🎯 **Afterwards**: Learn whether that intervention worked (3-minute post-intervention verification & personalization)
 
-```
-User Intent
-    ↓
-Usage Monitoring (Real Win32 / Extension / Scenario Simulator)
-    ↓
-Behavior Trajectory Analysis
-    ↓
-Attention Drift Detection (Nominal ➔ Mild ➔ Moderate ➔ Acute)
-    ↓
-Transparent Risk Scoring (0–100% Explainable Points)
-    ↓
-AI Recommendation Engine (Hybrid Groq LLM + Fallback Heuristics)
-    ↓
-Adaptive 5-Tier Intervention ("Suggestion First, Restriction Later")
-    ↓
-Outcome Tracking (Accepted / Dismissed / Recovered)
-    ↓
-Behavioral Personalization (Learns which intervention works best for you)
-```
+**The existing v1 restriction system becomes the foundation (Level 4 enforcement backend), while the genuinely new work in 2.0 centers around intent tracking, behavior trajectory analysis, attention-drift detection, AI recommendations, context-aware interventions, and personalization.**
 
 ---
 

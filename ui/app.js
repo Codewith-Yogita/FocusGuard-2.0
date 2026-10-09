@@ -597,12 +597,25 @@ function toggleUserDropdown() {
   }
 }
 
+function toggleDemoDropdown() {
+  const dd = document.getElementById("demoMenuDropdown");
+  if (dd) {
+    dd.style.display = (dd.style.display === "none" || !dd.style.display) ? "block" : "none";
+  }
+}
+
 // Close dropdown on click outside
 document.addEventListener("click", (e) => {
   const pill = document.getElementById("userPresencePill");
   const dd = document.getElementById("userProfileDropdown");
   if (dd && dd.style.display === "block" && pill && !pill.contains(e.target) && !dd.contains(e.target)) {
     dd.style.display = "none";
+  }
+
+  const demoBtn = document.getElementById("btnDemoMenu");
+  const demoDd = document.getElementById("demoMenuDropdown");
+  if (demoDd && demoDd.style.display === "block" && demoBtn && !demoBtn.contains(e.target) && !demoDd.contains(e.target)) {
+    demoDd.style.display = "none";
   }
 });
 

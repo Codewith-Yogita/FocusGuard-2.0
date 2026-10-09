@@ -21808,5 +21808,20 @@
     "verify_at": 1791535698.4593906,
     "recovery_outcome": "DRIFT_PERSISTED",
     "verified_at": 1791535698.8628864
+  },
+  {
+    "intervention_id": "int_1791541240_1",
+    "user_id": "default_user",
+    "intent_id": "ff464270",
+    "timestamp": 1791541240.087913,
+    "time_iso": "2026-10-09T10:20:40Z",
+    "tier_level": 1,
+    "risk_score": 45,
+    "headline": "Mind Mirror: The 15-Second Trap",
+    "rationale": "Algorithmic short-form video trap detected; prompting conscious reflection.",
+    "action_chosen": "NONE",
+    "response_status": "PENDING_USER_RESPONSE",
+    "verify_at": 1791541420.087913,
+    "recovery_outcome": "PENDING_VERIFICATION"
   }
 ]

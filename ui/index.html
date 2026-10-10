@@ -70,47 +70,62 @@
         </div>
 
         <!-- User Presence & Profile Widget -->
-        <div class="user-presence-pill" id="userPresencePill" onclick="toggleUserDropdown()" title="Click to manage user profile and face presence">
-          <div class="presence-avatar" id="userAvatarText">ES</div>
-          <div class="presence-info">
-            <span class="presence-user-name" id="headerUserName">Eshan</span>
-            <span class="presence-status-label" id="headerPresenceStatus">🟢 Watching</span>
+        <div class="user-presence-wrapper" id="userPresenceWrapper">
+          <div class="user-presence-pill" id="userPresencePill" onclick="toggleUserDropdown(event)" title="Click to manage user profile, face login, and presence guard">
+            <div class="presence-avatar" id="userAvatarText">ES</div>
+            <div class="presence-info">
+              <span class="presence-user-name" id="headerUserName">Eshan</span>
+              <span class="presence-status-label" id="headerPresenceStatus">🟢 Watching</span>
+            </div>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
 
-        <!-- User Profile Dropdown Menu -->
-        <div id="userProfileDropdown" class="user-dropdown-menu" style="display: none;">
-          <div class="dropdown-header">
-            <strong style="color: #fff; font-size: 0.85rem;">Who is Watching?</strong>
-            <span style="font-size: 0.72rem; color: var(--text-muted);">Biometric Face Authentication</span>
-          </div>
-          <div class="dropdown-user-option active" id="userOptionEshan" onclick="switchUserProfile('Eshan')">
-            <div class="avatar-sm">ES</div>
-            <div>
-              <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Eshan (Enrolled Owner)</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted);">Social feeds & chatting restricted</div>
+          <!-- User Profile & Face Biometric Dropdown Menu -->
+          <div id="userProfileDropdown" class="user-dropdown-menu" style="display: none;">
+            <div class="dropdown-header">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="color: #fff; font-size: 0.85rem;">Face Authentication</strong>
+                <span id="dropdownGuardBadge" class="btn-chip" style="font-size: 0.65rem; padding: 2px 7px; color: #34d399; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1);">Guard ON</span>
+              </div>
+              <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;">Auto-switches to Guest if another person is present</span>
             </div>
-          </div>
-          <div class="dropdown-user-option" id="userOptionYogita" onclick="switchUserProfile('Yogita')">
-            <div class="avatar-sm">YO</div>
-            <div>
-              <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Yogita</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted);">Research & deep work profile</div>
+
+            <!-- Face Login CTA Button -->
+            <div style="padding: 0.75rem 0.85rem; background: rgba(99, 102, 241, 0.08); border-bottom: 1px solid var(--border-subtle); display:flex; flex-direction:column; gap:0.45rem;">
+              <button class="btn-action primary" style="font-size: 0.78rem; padding: 0.5rem; justify-content: center; width: 100%; font-weight: 700;" onclick="openFaceScannerModal(true)">
+                📷 Face Login & Register Owner
+              </button>
+              <button id="btnToggleLiveGuard" class="btn-chip" style="font-size: 0.72rem; padding: 0.35rem; justify-content: center; background: rgba(255, 255, 255, 0.06); color: #94a3b8; width: 100%;" onclick="toggleContinuousFaceGuard()">
+                🛡️ Live Camera Auto-Detect: <strong id="lblLiveGuardStatus" style="color: #34d399; margin-left: 3px;">ACTIVE</strong>
+              </button>
             </div>
-          </div>
-          <div class="dropdown-divider"></div>
-          <div style="padding: 0.6rem 0.85rem; display: flex; flex-direction: column; gap: 0.45rem;">
-            <button class="btn-action primary" style="font-size: 0.75rem; padding: 0.45rem; justify-content: center;" onclick="openFaceScannerModal()">
-              📷 Verify Face with Camera
-            </button>
-            <button class="btn-chip" style="font-size: 0.72rem; padding: 0.35rem; justify-content: center; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #34d399;" onclick="openFaceScannerModal(true)">
-              ✨ Enroll My Face as Owner
-            </button>
-            <div style="display: flex; gap: 0.3rem;">
-              <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem;" onclick="simulatePresence('USER_WATCHING')">👤 User</button>
-              <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem;" onclick="simulatePresence('GUEST_WATCHING')">👥 Guest</button>
-              <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem;" onclick="simulatePresence('AWAY')">🚶 Away</button>
+
+            <div style="padding: 0.5rem 0.85rem 0.3rem;">
+              <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700;">Enrolled Profiles</span>
+            </div>
+            <div class="dropdown-user-option active" id="userOptionEshan" onclick="switchUserProfile('Eshan')">
+              <div class="avatar-sm">ES</div>
+              <div>
+                <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Eshan (Enrolled Owner)</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">Restrictions active when watching</div>
+              </div>
+            </div>
+            <div class="dropdown-user-option" id="userOptionYogita" onclick="switchUserProfile('Yogita')">
+              <div class="avatar-sm">YO</div>
+              <div>
+                <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Yogita</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">Research & deep work profile</div>
+              </div>
+            </div>
+
+            <div class="dropdown-divider"></div>
+            <div style="padding: 0.6rem 0.85rem; display: flex; flex-direction: column; gap: 0.45rem;">
+              <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700;">Simulate / Test Presence</span>
+              <div style="display: flex; gap: 0.3rem;">
+                <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem;" onclick="simulatePresence('USER_WATCHING')" title="Simulate enrolled user at laptop">👤 Owner</button>
+                <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem; color: #f59e0b;" onclick="simulatePresence('GUEST_WATCHING')" title="Simulate someone else sitting in front of laptop">👥 Guest</button>
+                <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem; color: #94a3b8;" onclick="simulatePresence('AWAY')" title="Simulate stepping away from laptop">🚶 Away</button>
+              </div>
             </div>
           </div>
         </div>
@@ -485,59 +500,84 @@
     </div>
   </div>
 
-  <!-- Interactive Face Biometrics Scanner Modal -->
+  <!-- Interactive Face Biometrics & Owner Login Modal -->
   <div id="faceScannerModal" class="face-scanner-overlay" style="display: none;">
-    <div class="face-scanner-card">
+    <div class="face-scanner-card" style="max-width: 500px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <div style="display:flex; align-items:center; gap:8px;">
           <div class="presence-avatar" id="modalScannerAvatar">ES</div>
           <div style="text-align:left;">
-            <div style="font-weight:700; font-size:0.95rem; color:#fff;">Biometric Face Scanner</div>
-            <div style="font-size:0.72rem; color:var(--text-muted);">Who is watching screen?</div>
+            <div style="font-weight:700; font-size:1rem; color:#fff;">Biometric Face Login & Guard</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);">Scan face to lock restrictions to enrolled owner</div>
           </div>
         </div>
         <button class="btn-chip" onclick="closeFaceScannerModal()" style="padding:0.25rem 0.6rem;">✕</button>
+      </div>
+
+      <!-- User Name Field -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; text-align: left;">
+        <label style="font-size: 0.72rem; color: #a5b4fc; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">
+          Enrolled User Name:
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="faceLoginUsername" value="Eshan" placeholder="Enter username (e.g. Eshan)" class="input-text" style="font-size: 0.88rem; padding: 0.45rem 0.75rem; background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; color: #fff; flex: 1;" onchange="syncUsernameInput()" />
+          <button class="btn-chip" style="font-size: 0.75rem; padding: 0.45rem 0.85rem; background: rgba(99,102,241,0.2); border-color: rgba(99,102,241,0.5); color: #fff;" onclick="syncUsernameInput()">
+            Save Name
+          </button>
+        </div>
       </div>
 
       <div class="webcam-viewport" id="webcamViewport">
         <video id="scannerVideo" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; display:none;"></video>
         <canvas id="scannerCanvas" style="display:none;"></canvas>
         <div class="scanning-reticle" id="scannerReticle">
-          <div style="font-size:10px; color:#38bdf8; font-weight:700; text-transform:uppercase; letter-spacing:1px; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:4px;">
+          <div id="reticleStatusText" style="font-size:10px; color:#38bdf8; font-weight:700; text-transform:uppercase; letter-spacing:1px; background:rgba(0,0,0,0.7); padding:3px 8px; border-radius:4px;">
             Scanning Face
           </div>
         </div>
         <div id="scannerSimulationFeed" style="display:flex; flex-direction:column; align-items:center; gap:8px; z-index:1;">
           <div style="font-size:42px;">📷</div>
-          <div style="font-size:0.8rem; color:#94a3b8;">Local Facial Biometric Pipeline</div>
+          <div style="font-size:0.8rem; color:#94a3b8;">Local Facial Biometric Pipeline (YuNet + SFace)</div>
         </div>
       </div>
 
       <!-- Verdict card -->
-      <div id="scannerVerdictCard" style="background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:12px; padding:12px; margin-bottom:16px;">
-        <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Recognition Verdict</div>
-        <div id="scannerVerdictText" style="font-weight:700; font-size:1.05rem; color:#10b981;">👤 User Verified: Eshan (95% Match)</div>
-        <div id="scannerVerdictSubtext" style="font-size:0.75rem; color:#94a3b8; margin-top:3px;">
-          Enrolled owner active. Personal focus limits and 1-minute freeze penalty enabled.
+      <div id="scannerVerdictCard" style="background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:12px; padding:12px; margin-bottom:14px; text-align: left;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <span style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Biometric Recognition Status</span>
+          <span id="scannerVerdictBadge" class="btn-chip" style="font-size:0.65rem; padding:1px 6px; color:#10b981; border-color:rgba(16,185,129,0.4);">Ready</span>
+        </div>
+        <div id="scannerVerdictText" style="font-weight:700; font-size:1rem; color:#10b981;">👤 User Verified: Eshan (Active)</div>
+        <div id="scannerVerdictSubtext" style="font-size:0.75rem; color:#94a3b8; margin-top:3px; line-height: 1.35;">
+          Enrolled owner active. Focus limits & 1-min freeze penalty will ONLY apply when you are detected.
         </div>
       </div>
 
-      <!-- Test simulation actions -->
+      <!-- Test simulation & enrollment actions -->
       <div style="display:flex; flex-direction:column; gap:8px;">
-        <button id="btnStartWebcam" class="btn-action primary" style="justify-content:center; padding:10px;" onclick="startWebcamCapture()">
-          <span>🎥 Turn On Webcam Face Scanner</span>
+        <button id="btnEnrollFace" class="btn-action" style="background: linear-gradient(135deg, #10b981, #059669); color: white; justify-content:center; padding:11px; font-weight:700; font-size: 0.9rem;" onclick="enrollCurrentUserFace()">
+          <span>✨ Scan & Save Face as Enrolled Owner</span>
         </button>
-        <button id="btnEnrollFace" class="btn-action" style="background: linear-gradient(135deg, #10b981, #059669); color: white; justify-content:center; padding:10px; font-weight:700;" onclick="enrollCurrentUserFace()">
-          <span>✨ Enroll My Face as Owner</span>
-        </button>
-        <div style="display:flex; gap:6px;">
-          <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('USER_WATCHING'); setScannerVerdict('USER_WATCHING');">👤 User (Owner)</button>
-          <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('GUEST_WATCHING'); setScannerVerdict('GUEST_WATCHING');">👥 Guest</button>
-          <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('AWAY'); setScannerVerdict('AWAY');">🚶 Away</button>
+        <div style="display:flex; gap:8px;">
+          <button id="btnStartWebcam" class="btn-action primary" style="flex:1; justify-content:center; padding:8px; font-size: 0.78rem;" onclick="startWebcamCapture()">
+            <span>🎥 Start Camera</span>
+          </button>
+          <button id="btnModalGuardToggle" class="btn-chip" style="flex:1; justify-content:center; padding:8px; font-size: 0.75rem;" onclick="toggleContinuousFaceGuard()">
+            🛡️ Auto-Guard: <strong id="lblModalGuardStatus" style="color:#34d399; margin-left:2px;">ON</strong>
+          </button>
+        </div>
+        <div style="display:flex; gap:6px; margin-top: 4px;">
+          <button class="btn-chip" style="flex:1; font-size:0.72rem; padding: 0.3rem 0.4rem;" onclick="simulatePresence('USER_WATCHING'); setScannerVerdict('USER_WATCHING');" title="Simulate enrolled owner at laptop">👤 Owner (Active)</button>
+          <button class="btn-chip" style="flex:1; font-size:0.72rem; padding: 0.3rem 0.4rem; color: #f59e0b;" onclick="simulatePresence('GUEST_WATCHING'); setScannerVerdict('GUEST_WATCHING');" title="Simulate guest sitting in front of laptop">👥 Guest (No Restrictions)</button>
+          <button class="btn-chip" style="flex:1; font-size:0.72rem; padding: 0.3rem 0.4rem; color: #94a3b8;" onclick="simulatePresence('AWAY'); setScannerVerdict('AWAY');" title="Simulate stepping away from laptop">🚶 Away (Paused)</button>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Background Camera Video & Canvas for Continuous Presence Guard -->
+  <video id="bgFaceGuardVideo" autoplay playsinline muted style="display:none; width:320px; height:240px;"></video>
+  <canvas id="bgFaceGuardCanvas" style="display:none;"></canvas>
 
   <script src="app.js"></script>
 </body>

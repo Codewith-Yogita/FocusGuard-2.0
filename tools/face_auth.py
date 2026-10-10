@@ -385,7 +385,7 @@ class FaceAuthEngine:
         Interactive face enrollment.
         Supports both webcam capture and browser-streamed frames/image.
         """
-        user_id = (user_id or "Yogita").strip()
+        user_id = (user_id or self.simulated_user or "Eshan").strip()
         with self.lock:
             features = []
             landmark_history = []

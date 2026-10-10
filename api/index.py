@@ -6,7 +6,6 @@ Routes API and serverless requests to FocusGuardRequestHandler & WSGI app.
 
 import os
 import sys
-from http.server import BaseHTTPRequestHandler
 
 # Add project root and tools to sys.path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,10 +17,17 @@ if os.path.join(ROOT_DIR, "tools") not in sys.path:
 
 from ui.server import wsgi_app, FocusGuardRequestHandler
 
-def app(environ, start_response):
-    return wsgi_app(environ, start_response)
+app = wsgi_app
+application = wsgi_app
 
-application = app
+try:
+    from fastapi import FastAPI
+    from starlette.middleware.wsgi import WSGIMiddleware
+    fastapi_app = FastAPI(title="Focus Guard 2.0 API")
+    fastapi_app.mount("/", WSGIMiddleware(wsgi_app))
+    app = fastapi_app
+except Exception:
+    pass
 
 class handler(FocusGuardRequestHandler):
     pass

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Focus Guard 2.0 - Vercel & WSGI Entrypoint
-Exposes WSGI callable 'app' and 'application' as required by Vercel Function Python runtime.
+Focus Guard 2.0 - Vercel & WSGI/ASGI Entrypoint
+Exposes WSGI/ASGI callable 'app', 'application', and BaseHTTPRequestHandler 'handler'.
 """
 
 import os
@@ -16,12 +16,19 @@ if os.path.join(ROOT_DIR, "tools") not in sys.path:
 
 from ui.server import wsgi_app, FocusGuardRequestHandler, run_server, DEFAULT_PORT
 
-# Explicit top-level function definition and assignment for Vercel AST static scanner
-def app(environ, start_response):
-    return wsgi_app(environ, start_response)
-
-application = app
+# Top-level AST assignments required by Vercel Function static scanner
+app = wsgi_app
+application = wsgi_app
 handler = FocusGuardRequestHandler
+
+try:
+    from fastapi import FastAPI
+    from starlette.middleware.wsgi import WSGIMiddleware
+    fastapi_app = FastAPI(title="Focus Guard 2.0")
+    fastapi_app.mount("/", WSGIMiddleware(wsgi_app))
+    app = fastapi_app
+except Exception:
+    pass
 
 if __name__ == "__main__":
     port = DEFAULT_PORT

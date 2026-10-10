@@ -14,10 +14,8 @@ if os.path.join(ROOT_DIR, "tools") not in sys.path:
 
 from ui.server import wsgi_app, FocusGuardRequestHandler, run_server, DEFAULT_PORT
 
-def app(environ, start_response):
-    return wsgi_app(environ, start_response)
-
-application = app
+app = wsgi_app
+application = wsgi_app
 handler = FocusGuardRequestHandler
 
 if __name__ == "__main__":

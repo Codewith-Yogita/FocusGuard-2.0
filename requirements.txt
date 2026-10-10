@@ -1,4 +1,2 @@
-# Focus Guard 2.0 - Python Dependencies
-# The core Attention Drift Engine, User Intent System, Explainable Risk Scorer,
-# Adaptive Intervention Controller, and REST Gateway run purely on the Python standard library
-# for maximum speed, zero deployment friction, and 100% cloud portability.
+fastapi>=0.110.0
+uvicorn>=0.28.0

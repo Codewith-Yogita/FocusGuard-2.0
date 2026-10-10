@@ -3,5 +3,11 @@
   "framework": null,
   "cleanUrls": true,
   "buildCommand": "echo 'Focus Guard 2.0 Web Ready'",
-  "outputDirectory": "."
+  "outputDirectory": ".",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    }
+  ]
 }

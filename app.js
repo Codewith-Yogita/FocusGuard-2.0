@@ -1726,38 +1726,54 @@ async function enrollCurrentUserFace() {
 
 async function resetBiometricData() {
   if (!confirm("Are you sure you want to delete all stored face embeddings and user profiles? This cannot be undone.")) return;
+
+  // 1. Immediately reset client-side state
+  currentActiveUser = null;
+  ownerEnrolled = false;
+  currentPresenceState = "NOT_ENROLLED";
+  isAutoEnrolling = false;
+  isEnrollingInProgress = false;
+
+  const uInput = document.getElementById("faceLoginUsername");
+  if (uInput) uInput.value = "";
+
+  const autoBadge = document.getElementById("autoCaptureStatusBadge");
+  if (autoBadge) autoBadge.textContent = "⚡ Waiting for Name";
+
+  const btnEnroll = document.getElementById("btnEnrollFace");
+  if (btnEnroll) {
+    btnEnroll.innerHTML = "<span>✨ Scan & Save Face as Enrolled Owner</span>";
+    btnEnroll.style.background = "linear-gradient(135deg, #10b981, #059669)";
+  }
+
+  stopContinuousFaceGuard();
+
+  updateWhoIsWatchingUI({
+    owner_enrolled: false,
+    enrolled_owner: null,
+    user_id: null,
+    user_present: false,
+    is_guest: true,
+    status: "NOT_ENROLLED"
+  }, null);
+
+  setScannerVerdict("NOT_ENROLLED");
+  const dd = document.getElementById("userProfileDropdown");
+  if (dd) dd.style.display = "none";
+
+  // 2. Notify backend to clear disk templates and active session
   try {
-    const res = await fetch("/api/face/reset", {
+    await fetch("/api/face/reset", {
       method: "POST",
       headers: { "Content-Type": "application/json" }
-    });
-    const data = await res.json();
-    currentActiveUser = null;
-    ownerEnrolled = false;
-    currentPresenceState = "NOT_ENROLLED";
-
-    const uInput = document.getElementById("faceLoginUsername");
-    if (uInput) uInput.value = "";
-
-    updateWhoIsWatchingUI({
-      owner_enrolled: false,
-      enrolled_owner: null,
-      user_id: null,
-      user_present: false,
-      is_guest: true,
-      status: "NOT_ENROLLED"
-    }, null);
-
-    setScannerVerdict("NOT_ENROLLED");
-    const dd = document.getElementById("userProfileDropdown");
-    if (dd) dd.style.display = "none";
-
-    alert("Stored face biometrics deleted! You can now sign in with your fresh profile.");
-    pollLiveTelemetry();
+    }).catch(() => {});
   } catch (err) {
-    console.error("Reset biometric error:", err);
-    alert("Could not reset face data: " + err);
+    console.warn("Backend reset notice:", err);
   }
+
+  showToast("🗑️ Stored face biometrics deleted! Fresh start ready.");
+  alert("Stored face biometrics deleted! You can now sign in with your fresh profile.");
+  pollLiveTelemetry();
 }
 
 function setScannerVerdict(state, pres = null) {

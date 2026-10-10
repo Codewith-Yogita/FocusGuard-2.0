@@ -589,8 +589,8 @@
   </div>
 
   <!-- Background Camera Video & Canvas for Continuous Presence Guard -->
-  <video id="bgFaceGuardVideo" autoplay playsinline muted style="display:none; width:320px; height:240px;"></video>
-  <canvas id="bgFaceGuardCanvas" style="display:none;"></canvas>
+  <video id="bgFaceGuardVideo" autoplay playsinline muted style="position:fixed; top:0; left:0; width:320px; height:240px; opacity:0; pointer-events:none; z-index:-999;"></video>
+  <canvas id="bgFaceGuardCanvas" width="320" height="240" style="display:none;"></canvas>
 
   <script src="app.js"></script>
 </body>

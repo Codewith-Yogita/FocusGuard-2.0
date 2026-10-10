@@ -566,6 +566,11 @@ async function pollLiveTelemetry() {
       updateTelemetrySourceBadge(data.session.is_simulated_mode, data.current_activity.source);
       updateWhoIsWatchingUI(data.who_is_watching, data.session?.user_id);
       updateFreezePunishmentUI(data.freeze_punishment);
+
+      // Auto-start continuous camera guard as soon as an owner is enrolled!
+      if (data.who_is_watching?.owner_enrolled && !isContinuousFaceGuardActive) {
+        startContinuousFaceGuard();
+      }
       return;
     }
   } catch (err) {}
@@ -1411,14 +1416,26 @@ function triggerFaceEnrollment() {
 function captureWebcamFrame(useBackground = false) {
   let videoEl = document.getElementById("scannerVideo");
   let canvasEl = document.getElementById("scannerCanvas");
+  const bgVid = document.getElementById("bgFaceGuardVideo");
+  const bgCanv = document.getElementById("bgFaceGuardCanvas");
+
   if (useBackground || !videoEl || videoEl.style.display === "none" || !videoEl.videoWidth) {
-    const bgVid = document.getElementById("bgFaceGuardVideo");
-    const bgCanv = document.getElementById("bgFaceGuardCanvas");
-    if (bgVid && bgVid.videoWidth) {
+    if (bgVid && bgVid.videoWidth > 0) {
       videoEl = bgVid;
-      canvasEl = bgCanv;
+      canvasEl = bgCanv || canvasEl;
     }
   }
+
+  // Double fallback to whichever video element has videoWidth > 0
+  if ((!videoEl || !videoEl.videoWidth) && bgVid && bgVid.videoWidth > 0) {
+    videoEl = bgVid;
+    canvasEl = bgCanv || canvasEl;
+  }
+  if ((!videoEl || !videoEl.videoWidth) && document.getElementById("scannerVideo")?.videoWidth > 0) {
+    videoEl = document.getElementById("scannerVideo");
+    canvasEl = document.getElementById("scannerCanvas");
+  }
+
   if (!videoEl || !canvasEl || !videoEl.videoWidth || !videoEl.videoHeight) return null;
   canvasEl.width = videoEl.videoWidth;
   canvasEl.height = videoEl.videoHeight;
@@ -1842,34 +1859,41 @@ async function continuousFaceGuardTick() {
     if (res.ok) {
       const pres = await res.json();
       const status = pres.status || (pres.user_present ? "USER_WATCHING" : (pres.is_guest ? "GUEST_WATCHING" : "AWAY"));
-      if (status !== currentPresenceState) {
-        currentPresenceState = status;
+      currentPresenceState = status;
+      updateWhoIsWatchingUI(pres, pres.user_id || currentActiveUser);
+      const modal = document.getElementById("faceScannerModal");
+      if (modal && modal.style.display !== "none") {
         setScannerVerdict(status, pres);
-        updateWhoIsWatchingUI(pres, pres.user_id || currentActiveUser);
       }
     }
-  } catch (err) {}
+  } catch (err) {
+    console.warn("Face guard tick note:", err);
+  }
 }
 
 async function startContinuousFaceGuard() {
   isContinuousFaceGuardActive = true;
   updateGuardButtonsUI(true);
   const bgVideo = document.getElementById("bgFaceGuardVideo");
-  if (!webcamStream || !webcamStream.active) {
-    try {
+  try {
+    if (!webcamStream || !webcamStream.active) {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        webcamStream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
-        if (bgVideo) bgVideo.srcObject = webcamStream;
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 320, height: 240, facingMode: "user" }
+        });
       }
-    } catch (e) {
-      console.warn("Continuous guard camera access:", e);
     }
-  } else if (bgVideo && !bgVideo.srcObject) {
-    bgVideo.srcObject = webcamStream;
+    if (bgVideo && webcamStream) {
+      bgVideo.srcObject = webcamStream;
+      await bgVideo.play().catch(() => {});
+    }
+  } catch (e) {
+    console.warn("Continuous guard camera access:", e);
   }
 
   if (continuousFaceGuardInterval) clearInterval(continuousFaceGuardInterval);
-  continuousFaceGuardInterval = setInterval(continuousFaceGuardTick, 1800);
+  continuousFaceGuardInterval = setInterval(continuousFaceGuardTick, 1500);
+  setTimeout(continuousFaceGuardTick, 300);
 }
 
 function stopContinuousFaceGuard() {

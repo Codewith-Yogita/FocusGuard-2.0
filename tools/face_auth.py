@@ -668,6 +668,9 @@ class FaceAuthEngine:
           - user_present=False, is_guest=False (No face in front of screen -> Restrictions paused)
         """
         with self.lock:
+            templates = self._load_templates()
+            enrolled_owner = user_id or self.simulated_user or self.get_enrolled_owner()
+
             # 1. If camera frame image is provided (live webcam feed), evaluate actual frame!
             if image:
                 frame = decode_base64_image(image)
@@ -676,7 +679,9 @@ class FaceAuthEngine:
                         "present": False,
                         "user_present": False,
                         "is_guest": False,
-                        "user_id": None,
+                        "owner_enrolled": bool(enrolled_owner),
+                        "enrolled_owner": enrolled_owner,
+                        "user_id": enrolled_owner,
                         "confidence": 0.0,
                         "status": "AWAY",
                         "reason": "invalid_frame",
@@ -690,6 +695,9 @@ class FaceAuthEngine:
                         "present": not (self.simulated_state == "AWAY"),
                         "user_present": is_owner,
                         "is_guest": is_gst,
+                        "owner_enrolled": bool(enrolled_owner),
+                        "enrolled_owner": enrolled_owner,
+                        "user_id": enrolled_owner if is_owner else None,
                         "status": self.simulated_state,
                         "confidence": 0.95 if is_owner else 0.40,
                         "message": f"Biometric stream received ({self.simulated_state})."
@@ -703,11 +711,13 @@ class FaceAuthEngine:
                         "present": False,
                         "user_present": False,
                         "is_guest": False,
-                        "user_id": None,
+                        "owner_enrolled": bool(enrolled_owner),
+                        "enrolled_owner": enrolled_owner,
+                        "user_id": enrolled_owner,
                         "confidence": 0.0,
                         "status": "AWAY",
                         "reason": "no_face",
-                        "message": "No face detected in camera frame. User stepped away. Distraction restrictions paused."
+                        "message": f"No face detected in camera frame. User '{enrolled_owner or 'Owner'}' stepped away. Distraction restrictions paused."
                     }
 
                 feat = self.extract_feature(aligned)
@@ -717,15 +727,14 @@ class FaceAuthEngine:
                         "present": False,
                         "user_present": False,
                         "is_guest": False,
-                        "user_id": None,
+                        "owner_enrolled": bool(enrolled_owner),
+                        "enrolled_owner": enrolled_owner,
+                        "user_id": enrolled_owner,
                         "confidence": 0.0,
                         "status": "AWAY",
                         "reason": "no_face",
                         "message": "Unable to extract facial landmarks. Restrictions paused."
                     }
-
-                templates = self._load_templates()
-                enrolled_owner = user_id or self.simulated_user or self.get_enrolled_owner()
 
                 if not enrolled_owner or enrolled_owner not in templates:
                     # Face is in camera view, but NO owner has enrolled on this device yet!

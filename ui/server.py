@@ -298,15 +298,18 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "message": "No owner profile enrolled on this device. Sign in with face to activate focus restrictions."
                 }
             else:
+                sim_st = face_auth_engine.simulated_state if face_auth_engine else "USER_WATCHING"
+                is_pres = (sim_st == "USER_WATCHING")
+                is_gst = (sim_st == "GUEST_WATCHING")
                 watcher_status = {
                     "owner_enrolled": True,
                     "enrolled_owner": enrolled_owner,
                     "user_id": active_uid or enrolled_owner,
-                    "user_present": True,
-                    "is_guest": False,
-                    "status": "USER_WATCHING",
-                    "confidence": 0.95,
-                    "message": f"Enrolled owner '{enrolled_owner}' verified watching screen. Focus policies active."
+                    "user_present": is_pres,
+                    "is_guest": is_gst,
+                    "status": sim_st,
+                    "confidence": 0.95 if is_pres else (0.35 if is_gst else 0.0),
+                    "message": f"Enrolled owner '{enrolled_owner}' presence: {sim_st}."
                 }
 
             if face_auth_engine:

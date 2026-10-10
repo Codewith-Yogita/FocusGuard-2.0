@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: focusguard-dashboard
+    env: static
+    buildCommand: echo 'Ready'
+    staticPublishPath: .
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

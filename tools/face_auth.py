@@ -74,6 +74,10 @@ def dpapi_protect(data: bytes, description: str = "focusguard_face_template") ->
     if not isinstance(data, bytes):
         data = data.encode('utf-8')
     
+    if not hasattr(ctypes, "windll"):
+        # Graceful fallback for non-Windows cloud environments (e.g., Vercel / Linux)
+        return base64.b64encode(data)
+
     blob_in = DATA_BLOB(len(data), ctypes.cast(ctypes.create_string_buffer(data), ctypes.POINTER(ctypes.c_byte)))
     blob_out = DATA_BLOB()
     
@@ -96,6 +100,13 @@ def dpapi_protect(data: bytes, description: str = "focusguard_face_template") ->
 
 def dpapi_unprotect(encrypted_data: bytes) -> bytes:
     """Decrypts DPAPI-protected bytes using current Windows user credentials."""
+    if not hasattr(ctypes, "windll"):
+        # Graceful fallback for non-Windows cloud environments (e.g., Vercel / Linux)
+        try:
+            return base64.b64decode(encrypted_data)
+        except Exception:
+            return encrypted_data
+
     blob_in = DATA_BLOB(len(encrypted_data), ctypes.cast(ctypes.create_string_buffer(encrypted_data), ctypes.POINTER(ctypes.c_byte)))
     blob_out = DATA_BLOB()
     

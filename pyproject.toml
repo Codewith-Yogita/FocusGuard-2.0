@@ -1,0 +1,11 @@
+[project]
+name = "focusguard-2-0"
+version = "2.0.0"
+description = "Focus Guard 2.0 - Adaptive Digital Wellbeing Assistant"
+requires-python = ">=3.9"
+
+[project.scripts]
+app = "server:app"
+
+[tool.vercel]
+entrypoint = "server:app"

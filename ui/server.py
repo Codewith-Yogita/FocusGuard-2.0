@@ -13,6 +13,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+import io
 import http.server
 import socketserver
 import os
@@ -122,7 +123,9 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
     """Handles REST API calls and serves static web assets."""
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=UI_DIR, **kwargs)
+        if len(args) < 4 and "directory" not in kwargs:
+            kwargs["directory"] = UI_DIR
+        super().__init__(*args, **kwargs)
 
     def _send_json(self, status_code: int, data: Any):
         self.send_response(status_code)
@@ -863,6 +866,132 @@ def run_server(port=DEFAULT_PORT):
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("\n[Focus Guard 2.0] Server stopped.")
+
+
+# =============================================================================
+# WSGI / VERCEL ENTRYPOINT COMPATIBILITY LAYER
+# =============================================================================
+
+class WSGIBridge(FocusGuardRequestHandler):
+    """Bridges WSGI environ requests to FocusGuardRequestHandler without socket bindings."""
+
+    def __init__(self, environ):
+        self.environ = environ
+        self.path = environ.get('PATH_INFO', '/')
+        if environ.get('QUERY_STRING'):
+            self.path += '?' + environ['QUERY_STRING']
+        self.command = environ.get('REQUEST_METHOD', 'GET')
+        self.rfile = environ.get('wsgi.input') or io.BytesIO(b'')
+        self.wfile = io.BytesIO()
+        self.headers = {}
+
+        content_length = environ.get('CONTENT_LENGTH')
+        if content_length:
+            self.headers['Content-Length'] = content_length
+        content_type = environ.get('CONTENT_TYPE')
+        if content_type:
+            self.headers['Content-Type'] = content_type
+
+        for k, v in environ.items():
+            if k.startswith('HTTP_'):
+                hdr_name = k[5:].replace('_', '-').title()
+                self.headers[hdr_name] = v
+
+        self.status_code = 200
+        self.response_headers = []
+
+    def send_response(self, code, message=None):
+        self.status_code = code
+
+    def send_header(self, keyword, value):
+        self.response_headers.append((keyword, str(value)))
+
+    def end_headers(self):
+        pass
+
+
+def wsgi_app(environ, start_response):
+    """
+    Standard WSGI callable (PEP 3333) compatible with Vercel, Gunicorn, and uWSGI.
+    Handles static dashboard files and dynamic REST API endpoints.
+    """
+    method = environ.get('REQUEST_METHOD', 'GET').upper()
+    path = environ.get('PATH_INFO', '/')
+
+    # 1. CORS Preflight
+    if method == 'OPTIONS':
+        headers = [
+            ('Content-Type', 'text/plain'),
+            ('Access-Control-Allow-Origin', '*'),
+            ('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'),
+            ('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        ]
+        start_response('200 OK', headers)
+        return [b'']
+
+    # 2. Static Assets (UI Dashboard)
+    if method == 'GET' and not path.startswith('/api/') and path not in ('/goal/evaluate', '/api/goal/evaluate'):
+        file_name = 'index.html' if path in ('/', '') else path.lstrip('/')
+        if file_name.startswith('ui/'):
+            file_name = file_name[3:]
+        file_path = os.path.join(UI_DIR, file_name)
+
+        if os.path.isfile(file_path):
+            content_type = 'application/octet-stream'
+            if file_path.endswith('.html'):
+                content_type = 'text/html; charset=utf-8'
+            elif file_path.endswith('.css'):
+                content_type = 'text/css; charset=utf-8'
+            elif file_path.endswith('.js'):
+                content_type = 'application/javascript; charset=utf-8'
+            elif file_path.endswith('.svg'):
+                content_type = 'image/svg+xml'
+            elif file_path.endswith('.json'):
+                content_type = 'application/json'
+
+            try:
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+                headers = [
+                    ('Content-Type', content_type),
+                    ('Content-Length', str(len(content))),
+                    ('Access-Control-Allow-Origin', '*')
+                ]
+                start_response('200 OK', headers)
+                return [content]
+            except Exception:
+                pass
+
+    # 3. Dynamic API Request Handling via WSGIBridge
+    bridge = WSGIBridge(environ)
+    if method == 'GET':
+        bridge.do_GET()
+    elif method == 'POST':
+        bridge.do_POST()
+    else:
+        bridge.send_response(405)
+        bridge.send_header('Content-Type', 'application/json')
+        bridge.wfile.write(b'{"error": "Method Not Allowed"}')
+
+    status_str = f"{bridge.status_code} OK" if bridge.status_code == 200 else f"{bridge.status_code} Result"
+    headers = list(bridge.response_headers)
+    if not any(k.lower() == 'access-control-allow-origin' for k, _ in headers):
+        headers.append(('Access-Control-Allow-Origin', '*'))
+    if not any(k.lower() == 'content-type' for k, _ in headers):
+        headers.append(('Content-Type', 'application/json'))
+
+    body = bridge.wfile.getvalue()
+    if not any(k.lower() == 'content-length' for k, _ in headers):
+        headers.append(('Content-Length', str(len(body))))
+
+    start_response(status_str, headers)
+    return [body]
+
+
+# Top-level variables required by Vercel Function Python runtime
+app = wsgi_app
+application = wsgi_app
+handler = FocusGuardRequestHandler
 
 
 if __name__ == "__main__":

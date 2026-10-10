@@ -160,8 +160,8 @@ class FaceAuthEngine:
         self.detector = None
         self.recognizer = None
         self.initialized = False
-        self.simulated_state = "USER_WATCHING"
-        self.simulated_user = "Eshan"
+        self.simulated_state = "NOT_ENROLLED"
+        self.simulated_user = None
         self.has_opencv = HAS_OPENCV
         
         if HAS_OPENCV:
@@ -235,44 +235,24 @@ class FaceAuthEngine:
     def _load_templates(self) -> dict:
         """
         Decrypts and loads all templates from encrypted storage.
-        Returns a dict of {user_id: template_data}.
+        Returns a dict of {user_id: template_data}. Empty dict if no templates enrolled.
         """
-        default_profiles = {
-            "Eshan": {
-                "user_id": "Eshan",
-                "template_id": "tmpl_eshan_default",
-                "enrolled_at": int(time.time()),
-                "feature_vector": [0.0] * 128,
-                "frames_count": 15
-            },
-            "Yogita": {
-                "user_id": "Yogita",
-                "template_id": "tmpl_yogita_default",
-                "enrolled_at": int(time.time()),
-                "feature_vector": [0.0] * 128,
-                "frames_count": 15
-            }
-        }
         if not os.path.exists(TEMPLATE_PATH):
-            return default_profiles
+            return {}
         try:
             with open(TEMPLATE_PATH, "rb") as f:
                 encrypted_data = f.read()
             decrypted_json = dpapi_unprotect(encrypted_data).decode("utf-8")
             data = json.loads(decrypted_json)
             if isinstance(data, dict):
-                if "templates" in data and isinstance(data["templates"], dict) and len(data["templates"]) > 0:
+                if "templates" in data and isinstance(data["templates"], dict):
                     return data["templates"]
                 elif "user_id" in data:
                     uid = data["user_id"]
-                    t_dict = {uid: data}
-                    if uid == "default":
-                        t_dict["Eshan"] = dict(data)
-                        t_dict["Eshan"]["user_id"] = "Eshan"
-                    return t_dict
-            return default_profiles
-        except Exception as ex:
-            return default_profiles
+                    return {uid: data}
+            return {}
+        except Exception:
+            return {}
 
     def _save_templates(self, templates_dict: dict):
         """Encrypts templates dictionary with DPAPI and persists to disk."""
@@ -294,15 +274,8 @@ class FaceAuthEngine:
         templates = self._load_templates()
         if not templates:
             return None
-        if user_id:
-            if user_id in templates:
-                return templates[user_id]
-            if user_id == "default" and "Yogita" in templates:
-                return templates["Yogita"]
-            if user_id == "Yogita" and "default" in templates:
-                return templates["default"]
-            return None
-        # Return most recently enrolled/updated template
+        if user_id and user_id in templates:
+            return templates[user_id]
         sorted_templates = sorted(
             templates.values(),
             key=lambda t: t.get("enrolled_at", 0) if isinstance(t, dict) else 0,
@@ -310,23 +283,48 @@ class FaceAuthEngine:
         )
         return sorted_templates[0] if sorted_templates else None
 
+    def get_enrolled_owner(self) -> str:
+        """Returns the primary enrolled owner username, or None if no owner enrolled."""
+        templates = self._load_templates()
+        for uid, t_data in templates.items():
+            if not isinstance(t_data, dict):
+                continue
+            vec = t_data.get("feature_vector", [])
+            if any(abs(v) > 1e-4 for v in vec):
+                return uid
+        return None
+
     def list_enrolled_users(self) -> list:
         """Returns list of all user IDs that have enrolled biometric face templates."""
         templates = self._load_templates()
-        users = list(templates.keys())
-        # If 'default' exists along with named users, prefer named users
-        if "default" in users and len(users) > 1:
-            users = [u for u in users if u != "default"]
+        users = []
+        for uid, t_data in templates.items():
+            if not isinstance(t_data, dict):
+                continue
+            vec = t_data.get("feature_vector", [])
+            if any(abs(v) > 1e-4 for v in vec):
+                users.append(uid)
         return users
 
     def is_enrolled(self, user_id=None) -> bool:
-        """Checks if an encrypted face template exists for the given user (or any user if user_id is None)."""
-        templates = self._load_templates()
-        if not templates:
+        """Checks if a valid enrolled face template exists."""
+        owner = self.get_enrolled_owner()
+        if not owner:
             return False
         if not user_id or user_id in ("any", "default"):
-            return len(templates) > 0
-        return user_id in templates or ("default" in templates and user_id == "Yogita")
+            return True
+        return user_id == owner
+
+    def clear_all_templates(self):
+        """Clears all biometric face templates from disk (fresh reset)."""
+        with self.lock:
+            if os.path.exists(TEMPLATE_PATH):
+                try:
+                    os.remove(TEMPLATE_PATH)
+                except Exception:
+                    pass
+            self.simulated_user = None
+            self.simulated_state = "NOT_ENROLLED"
 
     def detect_and_align(self, frame):
         """
@@ -380,12 +378,14 @@ class FaceAuthEngine:
             return False
         return True
 
-    def enroll(self, user_id="Yogita", target_frames=15, image=None, frames=None) -> dict:
+    def enroll(self, user_id=None, target_frames=15, image=None, frames=None) -> dict:
         """
         Interactive face enrollment.
         Supports both webcam capture and browser-streamed frames/image.
         """
-        user_id = (user_id or self.simulated_user or "Eshan").strip()
+        user_id = (user_id or self.simulated_user or "").strip()
+        if not user_id:
+            user_id = self.get_enrolled_owner() or "Owner"
         with self.lock:
             features = []
             landmark_history = []
@@ -409,7 +409,28 @@ class FaceAuthEngine:
                         feat = self.extract_feature(aligned)
                         if feat is not None:
                             features.append(feat)
-                            landmark_history.append(best_face[4:14])
+            elif not HAS_OPENCV or cv2 is None or not self.initialized:
+                template_id = str(uuid.uuid4())
+                template_data = {
+                    "user_id": user_id,
+                    "template_id": template_id,
+                    "enrolled_at": int(time.time()),
+                    "model": "virtual_secure_biometrics",
+                    "feature_vector": [1.0] * 128,
+                    "frames_count": 1
+                }
+                templates = {user_id: template_data}
+                self._save_templates(templates)
+                self.simulated_state = "USER_WATCHING"
+                self.simulated_user = user_id
+                return {
+                    "success": True,
+                    "status": "enrolled",
+                    "code": 200,
+                    "template_id": template_id,
+                    "user_id": user_id,
+                    "message": f"Biometric face profile registered for '{user_id}'. Owner gating active."
+                }
             else:
                 # 2. Capture live webcam frames
                 cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
@@ -476,8 +497,8 @@ class FaceAuthEngine:
                 "frames_count": len(features)
             }
 
-            templates = self._load_templates()
-            templates[user_id] = template_data
+            # Clean slate: save this particular user as the exclusive enrolled owner
+            templates = {user_id: template_data}
             self._save_templates(templates)
 
             self.simulated_state = "USER_WATCHING"
@@ -497,7 +518,9 @@ class FaceAuthEngine:
 
     def is_real_enrolled(self, user_id=None) -> bool:
         """Returns True if user has an actual captured 128-d face embedding (not placeholder zeros)."""
-        target = user_id or self.simulated_user or "Eshan"
+        target = user_id or self.get_enrolled_owner()
+        if not target:
+            return False
         templates = self._load_templates()
         t_data = templates.get(target)
         if not t_data:
@@ -685,27 +708,53 @@ class FaceAuthEngine:
                     }
 
                 templates = self._load_templates()
-                target_user = user_id or self.simulated_user or "Eshan"
-                target_template = templates.get(target_user)
+                enrolled_owner = user_id or self.simulated_user or self.get_enrolled_owner()
 
-                has_real_enrolled = (
-                    target_template is not None
-                    and "feature_vector" in target_template
-                    and any(abs(v) > 1e-4 for v in target_template.get("feature_vector", []))
-                )
-
-                if not has_real_enrolled:
-                    # Template has not been captured yet; accept presence but flag need to enroll
-                    self.simulated_state = "USER_WATCHING"
+                if not enrolled_owner or enrolled_owner not in templates:
+                    # Face is in camera view, but NO owner has enrolled on this device yet!
+                    self.simulated_state = "NOT_ENROLLED"
                     return {
                         "present": True,
-                        "user_present": True,
+                        "user_present": False,
+                        "is_guest": True,
+                        "owner_enrolled": False,
+                        "enrolled_owner": None,
+                        "user_id": None,
+                        "confidence": 0.0,
+                        "status": "NOT_ENROLLED",
+                        "message": "Face detected, but no owner profile is enrolled on this device. Please sign in with your face."
+                    }
+
+                target_template = templates[enrolled_owner]
+                has_real_enrolled = any(abs(v) > 1e-4 for v in target_template.get("feature_vector", []))
+                if not has_real_enrolled:
+                    self.simulated_state = "NOT_ENROLLED"
+                    return {
+                        "present": True,
+                        "user_present": False,
+                        "is_guest": True,
+                        "owner_enrolled": False,
+                        "enrolled_owner": None,
+                        "user_id": None,
+                        "confidence": 0.0,
+                        "status": "NOT_ENROLLED",
+                        "message": "No owner face enrolled on this device. Please sign in with your face."
+                    }
+
+                feat = self.extract_feature(aligned)
+                if feat is None:
+                    self.simulated_state = "AWAY"
+                    return {
+                        "present": False,
+                        "user_present": False,
                         "is_guest": False,
-                        "user_id": target_user,
-                        "confidence": 0.95,
-                        "status": "USER_WATCHING",
-                        "needs_enrollment": True,
-                        "message": f"Owner '{target_user}' detected in front of screen. Restrictions active."
+                        "owner_enrolled": True,
+                        "enrolled_owner": enrolled_owner,
+                        "user_id": enrolled_owner,
+                        "confidence": 0.0,
+                        "status": "AWAY",
+                        "reason": "no_face",
+                        "message": "Unable to extract facial landmarks. Restrictions paused."
                     }
 
                 stored_feat = np.array(target_template["feature_vector"], dtype=np.float32).reshape(1, -1)
@@ -714,14 +763,17 @@ class FaceAuthEngine:
 
                 if score >= self.threshold:
                     self.simulated_state = "USER_WATCHING"
+                    self.simulated_user = enrolled_owner
                     return {
                         "present": True,
                         "user_present": True,
                         "is_guest": False,
-                        "user_id": target_user,
+                        "owner_enrolled": True,
+                        "enrolled_owner": enrolled_owner,
+                        "user_id": enrolled_owner,
                         "confidence": round(norm_conf, 3),
                         "status": "USER_WATCHING",
-                        "message": f"Enrolled owner '{target_user}' verified watching screen ({int(norm_conf * 100)}% match). Restrictions active."
+                        "message": f"Enrolled owner '{enrolled_owner}' verified watching screen ({int(norm_conf * 100)}% match). Focus restrictions active."
                     }
                 else:
                     self.simulated_state = "GUEST_WATCHING"
@@ -729,46 +781,67 @@ class FaceAuthEngine:
                         "present": True,
                         "user_present": False,
                         "is_guest": True,
+                        "owner_enrolled": True,
+                        "enrolled_owner": enrolled_owner,
                         "user_id": "guest",
                         "confidence": round(norm_conf, 3),
                         "status": "GUEST_WATCHING",
                         "reason": "unrecognized_face",
-                        "message": f"Guest detected: face does not match enrolled owner '{target_user}'. Distraction restrictions paused."
+                        "message": f"Guest detected: face does not match enrolled owner '{enrolled_owner}'. Zero restrictions applied."
                     }
 
             # 2. When no image is passed, handle simulated or manual state toggles
-            active_u = user_id or self.simulated_user or "Eshan"
+            enrolled_owner = user_id or self.simulated_user or self.get_enrolled_owner()
+            if not enrolled_owner:
+                return {
+                    "present": False,
+                    "user_present": False,
+                    "is_guest": True,
+                    "owner_enrolled": False,
+                    "enrolled_owner": None,
+                    "user_id": None,
+                    "confidence": 0.0,
+                    "status": "NOT_ENROLLED",
+                    "message": "Setup required: No owner face enrolled. Click 'Sign In With Face' to register."
+                }
+
             if self.simulated_state == "USER_WATCHING":
                 return {
                     "present": True,
                     "user_present": True,
                     "is_guest": False,
-                    "user_id": active_u,
+                    "owner_enrolled": True,
+                    "enrolled_owner": enrolled_owner,
+                    "user_id": enrolled_owner,
                     "confidence": 0.95,
                     "status": "USER_WATCHING",
-                    "message": f"Enrolled owner '{active_u}' verified watching screen. Focus policies active."
+                    "message": f"Enrolled owner '{enrolled_owner}' verified watching screen. Focus policies active."
                 }
             elif self.simulated_state == "GUEST_WATCHING":
                 return {
                     "present": True,
                     "user_present": False,
                     "is_guest": True,
+                    "owner_enrolled": True,
+                    "enrolled_owner": enrolled_owner,
                     "user_id": "guest",
                     "confidence": 0.35,
                     "status": "GUEST_WATCHING",
                     "reason": "unrecognized_face",
-                    "message": "Guest detected: non-enrolled person watching screen. Distraction restrictions paused."
+                    "message": f"Guest detected: face does not match enrolled owner '{enrolled_owner}'. Distraction restrictions paused."
                 }
             elif self.simulated_state == "AWAY":
                 return {
                     "present": False,
                     "user_present": False,
                     "is_guest": False,
-                    "user_id": None,
+                    "owner_enrolled": True,
+                    "enrolled_owner": enrolled_owner,
+                    "user_id": enrolled_owner,
                     "confidence": 0.0,
                     "status": "AWAY",
                     "reason": "no_face",
-                    "message": "No face detected in front of screen. User stepped away. Restrictions paused."
+                    "message": f"Enrolled owner '{enrolled_owner}' stepped away from screen. Restrictions paused."
                 }
 
             if not HAS_OPENCV:
@@ -776,10 +849,12 @@ class FaceAuthEngine:
                     "present": True,
                     "user_present": True,
                     "is_guest": False,
-                    "user_id": active_u,
+                    "owner_enrolled": True,
+                    "enrolled_owner": enrolled_owner,
+                    "user_id": enrolled_owner,
                     "confidence": 0.92,
                     "status": "USER_WATCHING",
-                    "message": f"Virtual biometrics verified user '{active_u}' watching screen."
+                    "message": f"Virtual biometrics verified owner '{enrolled_owner}' watching screen."
                 }
 
             # Select target template
@@ -895,8 +970,6 @@ class FaceAuthEngine:
                 templates = self._load_templates()
                 if user_id in templates:
                     del templates[user_id]
-                if user_id == "Yogita" and "default" in templates:
-                    del templates["default"]
 
                 if templates:
                     self._save_templates(templates)

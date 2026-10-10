@@ -93,7 +93,7 @@ let clientSession = {
   distraction_seconds: 120,
   interventions_count: 1,
   current_risk_score: 6,
-  user_id: "Eshan",
+  user_id: null,
   is_simulated_mode: true
 };
 
@@ -1024,8 +1024,9 @@ function runAutoJudgeDemo() {
 // WHO'S WATCHING & USER SPECIFICNESS
 // ============================================================================
 
-let currentActiveUser = "Eshan";
-let currentPresenceState = "USER_WATCHING";
+let currentActiveUser = null;
+let ownerEnrolled = false;
+let currentPresenceState = "NOT_ENROLLED";
 let webcamStream = null;
 
 function toggleUserDropdown(e) {
@@ -1076,10 +1077,6 @@ async function switchUserProfile(userId) {
     const dd = document.getElementById("userProfileDropdown");
     if (dd) dd.style.display = "none";
 
-    document.querySelectorAll(".dropdown-user-option").forEach(el => el.classList.remove("active"));
-    const opt = document.getElementById(`userOption${userId}`);
-    if (opt) opt.classList.add("active");
-
     pollLiveTelemetry();
   } catch (err) {
     console.error("User switch error:", err);
@@ -1088,7 +1085,7 @@ async function switchUserProfile(userId) {
 
 async function simulatePresence(state) {
   currentPresenceState = state;
-  if (state === "GUEST_WATCHING" || state === "AWAY") {
+  if (state === "GUEST_WATCHING" || state === "AWAY" || state === "NOT_ENROLLED") {
     clientFreezePunishment.active = false;
     clientFreezePunishment.is_active = false;
     clearInterval(freezeCountdownTimer);
@@ -1129,8 +1126,41 @@ function updateWhoIsWatchingUI(watcher, activeUserId) {
   const modalAvatar = document.getElementById("modalScannerAvatar");
   const guestBanner = document.getElementById("guestAlertBanner");
   const presenceBtnLabel = document.getElementById("presenceDemoBtnLabel");
+  const ownerAvatar = document.getElementById("dropdownOwnerAvatar");
+  const ownerName = document.getElementById("dropdownOwnerName");
+  const ownerSub = document.getElementById("dropdownOwnerSub");
 
-  const uid = activeUserId || watcher?.user_id || currentActiveUser || "Eshan";
+  const enrolledOwner = watcher?.enrolled_owner || watcher?.owner_enrolled_user;
+  const isOwnerEnrolled = Boolean((watcher && watcher.owner_enrolled !== false && enrolledOwner) || (watcher?.owner_enrolled === true));
+
+  if (!isOwnerEnrolled && !enrolledOwner) {
+    ownerEnrolled = false;
+    currentActiveUser = null;
+    currentPresenceState = "NOT_ENROLLED";
+
+    if (userNameEl) userNameEl.textContent = "Sign In";
+    if (presenceStatusEl) {
+      presenceStatusEl.textContent = "⚪ Not Enrolled (Guest Mode)";
+      presenceStatusEl.style.color = "#94a3b8";
+    }
+    if (avatarEl) avatarEl.textContent = "👤";
+    if (modalAvatar) modalAvatar.textContent = "👤";
+
+    if (ownerAvatar) ownerAvatar.textContent = "👤";
+    if (ownerName) ownerName.textContent = "No Owner Enrolled Yet";
+    if (ownerSub) ownerSub.textContent = "Sign in with face to activate focus guard";
+
+    if (presenceBtnLabel) presenceBtnLabel.textContent = "No Owner (Guest Mode)";
+    if (guestBanner) guestBanner.style.display = "none";
+
+    const fBanner = document.getElementById("freezePunishmentBanner");
+    if (fBanner) fBanner.style.display = "none";
+    return;
+  }
+
+  // An owner IS registered on this machine!
+  ownerEnrolled = true;
+  const uid = enrolledOwner || activeUserId || watcher?.user_id || currentActiveUser || "Owner";
   currentActiveUser = uid;
 
   if (userNameEl) userNameEl.textContent = uid;
@@ -1138,17 +1168,9 @@ function updateWhoIsWatchingUI(watcher, activeUserId) {
   if (avatarEl) avatarEl.textContent = initials;
   if (modalAvatar) modalAvatar.textContent = initials;
 
-  const optEshan = document.getElementById("userOptionEshan");
-  const optYogita = document.getElementById("userOptionYogita");
-  if (optEshan && optYogita) {
-    if (uid === "Eshan") {
-      optEshan.classList.add("active");
-      optYogita.classList.remove("active");
-    } else {
-      optYogita.classList.add("active");
-      optEshan.classList.remove("active");
-    }
-  }
+  if (ownerAvatar) ownerAvatar.textContent = initials;
+  if (ownerName) ownerName.textContent = `${uid} (Enrolled Owner)`;
+  if (ownerSub) ownerSub.textContent = "Restrictions active when watching screen";
 
   const isGuest = watcher?.is_guest || (watcher?.status === "GUEST_WATCHING");
   const isAway = (watcher?.status === "AWAY" || watcher?.reason === "no_face" || watcher?.user_present === false);
@@ -1163,10 +1185,10 @@ function updateWhoIsWatchingUI(watcher, activeUserId) {
 
   if (presenceStatusEl) {
     if (isGuest) {
-      presenceStatusEl.textContent = "👥 Guest Detected (Paused)";
+      presenceStatusEl.textContent = "👥 Guest (No Restrictions)";
       presenceStatusEl.style.color = "#f59e0b";
     } else if (isAway) {
-      presenceStatusEl.textContent = "⚪ Away (Restrictions Paused)";
+      presenceStatusEl.textContent = `⚪ ${uid} Away (Paused)`;
       presenceStatusEl.style.color = "#94a3b8";
     } else {
       presenceStatusEl.textContent = `🟢 Watching (${uid})`;
@@ -1176,7 +1198,7 @@ function updateWhoIsWatchingUI(watcher, activeUserId) {
 
   if (presenceBtnLabel) {
     if (isGuest) presenceBtnLabel.textContent = "Guest Watching (Paused)";
-    else if (isAway) presenceBtnLabel.textContent = "User Away (Paused)";
+    else if (isAway) presenceBtnLabel.textContent = `${uid} Away (Paused)`;
     else presenceBtnLabel.textContent = `${uid} Watching (Active)`;
   }
 
@@ -1185,13 +1207,13 @@ function updateWhoIsWatchingUI(watcher, activeUserId) {
       guestBanner.style.display = "flex";
       const titleEl = document.getElementById("guestAlertTitle");
       const descEl = document.getElementById("guestAlertDesc");
-      if (titleEl) titleEl.textContent = "Guest Detected at Screen:";
-      if (descEl) descEl.textContent = "All distraction restrictions paused — non-enrolled person detected. Browsing and apps are unrestricted.";
+      if (titleEl) titleEl.textContent = `Guest Detected (Not ${uid}):`;
+      if (descEl) descEl.textContent = "All distraction restrictions paused — guest browsing is completely unrestricted.";
     } else if (isAway) {
       guestBanner.style.display = "flex";
       const titleEl = document.getElementById("guestAlertTitle");
       const descEl = document.getElementById("guestAlertDesc");
-      if (titleEl) titleEl.textContent = "User Stepped Away:";
+      if (titleEl) titleEl.textContent = `${uid} Stepped Away:`;
       if (descEl) descEl.textContent = "No face in front of screen. Focus monitoring, penalties, and lockouts are paused.";
     } else {
       guestBanner.style.display = "none";
@@ -1288,6 +1310,10 @@ function syncUsernameInput() {
     if (avatarEl) avatarEl.textContent = currentActiveUser.substring(0, 2).toUpperCase();
     const modalAvatar = document.getElementById("modalScannerAvatar");
     if (modalAvatar) modalAvatar.textContent = currentActiveUser.substring(0, 2).toUpperCase();
+    const ownerAvatar = document.getElementById("dropdownOwnerAvatar");
+    if (ownerAvatar) ownerAvatar.textContent = currentActiveUser.substring(0, 2).toUpperCase();
+    const ownerName = document.getElementById("dropdownOwnerName");
+    if (ownerName) ownerName.textContent = currentActiveUser;
     fetch("/api/users/switch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1346,15 +1372,21 @@ function openFaceScannerModal(triggerEnroll = false) {
   if (modal) modal.style.display = "flex";
 
   const uInput = document.getElementById("faceLoginUsername");
-  if (uInput && currentActiveUser) {
-    uInput.value = currentActiveUser;
+  if (uInput) {
+    uInput.value = currentActiveUser || "";
   }
   setScannerVerdict(currentPresenceState);
 
   startWebcamCapture().then(() => {
     if (triggerEnroll) {
       const subEl = document.getElementById("scannerVerdictSubtext");
-      if (subEl) subEl.textContent = `Camera active. Look straight at webcam with username '${currentActiveUser}' and click 'Scan & Save Face as Enrolled Owner'.`;
+      if (subEl) {
+        if (currentActiveUser) {
+          subEl.textContent = `Camera active. Look straight at webcam with username '${currentActiveUser}' and click 'Scan & Save Face as Enrolled Owner'.`;
+        } else {
+          subEl.textContent = "Camera active. Enter your name above and click 'Scan & Save Face as Enrolled Owner'.";
+        }
+      }
     }
   });
 }
@@ -1419,9 +1451,15 @@ async function enrollCurrentUserFace() {
   const textEl = document.getElementById("scannerVerdictText");
   const subEl = document.getElementById("scannerVerdictSubtext");
   const badgeEl = document.getElementById("scannerVerdictBadge");
+  const inputEl = document.getElementById("faceLoginUsername");
 
-  syncUsernameInput();
-  const targetUser = currentActiveUser || "Eshan";
+  const targetUser = (inputEl ? inputEl.value.trim() : "") || currentActiveUser;
+  if (!targetUser) {
+    alert("Please enter your name (e.g. Yogita) before scanning your face!");
+    if (inputEl) inputEl.focus();
+    return;
+  }
+  currentActiveUser = targetUser;
 
   if (!webcamStream || !webcamStream.active) {
     await startWebcamCapture();
@@ -1442,6 +1480,8 @@ async function enrollCurrentUserFace() {
     });
     const data = await res.json();
     if (data.success) {
+      ownerEnrolled = true;
+      currentPresenceState = "USER_WATCHING";
       if (btn) btn.innerHTML = "<span>✅ Enrolled & Logged In!</span>";
       if (textEl) {
         textEl.textContent = `✨ Enrolled Owner: ${targetUser} (Active)`;
@@ -1455,8 +1495,17 @@ async function enrollCurrentUserFace() {
       if (subEl) {
         subEl.textContent = `Your biometric face profile is registered & DPAPI-protected for '${targetUser}'. FocusGuard restrictions will now ONLY apply when you are in front of this laptop.`;
       }
-      currentPresenceState = "USER_WATCHING";
       startContinuousFaceGuard();
+      updateWhoIsWatchingUI({
+        owner_enrolled: true,
+        enrolled_owner: targetUser,
+        user_id: targetUser,
+        user_present: true,
+        is_guest: false,
+        status: "USER_WATCHING",
+        confidence: 0.96
+      }, targetUser);
+
       setTimeout(() => {
         if (btn) btn.innerHTML = "<span>✨ Scan & Save Face as Enrolled Owner</span>";
       }, 4000);
@@ -1474,6 +1523,42 @@ async function enrollCurrentUserFace() {
   }
 }
 
+async function resetBiometricData() {
+  if (!confirm("Are you sure you want to delete all stored face embeddings and user profiles? This cannot be undone.")) return;
+  try {
+    const res = await fetch("/api/face/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    const data = await res.json();
+    currentActiveUser = null;
+    ownerEnrolled = false;
+    currentPresenceState = "NOT_ENROLLED";
+
+    const uInput = document.getElementById("faceLoginUsername");
+    if (uInput) uInput.value = "";
+
+    updateWhoIsWatchingUI({
+      owner_enrolled: false,
+      enrolled_owner: null,
+      user_id: null,
+      user_present: false,
+      is_guest: true,
+      status: "NOT_ENROLLED"
+    }, null);
+
+    setScannerVerdict("NOT_ENROLLED");
+    const dd = document.getElementById("userProfileDropdown");
+    if (dd) dd.style.display = "none";
+
+    alert("Stored face biometrics deleted! You can now sign in with your fresh profile.");
+    pollLiveTelemetry();
+  } catch (err) {
+    console.error("Reset biometric error:", err);
+    alert("Could not reset face data: " + err);
+  }
+}
+
 function setScannerVerdict(state, pres = null) {
   const textEl = document.getElementById("scannerVerdictText");
   const subEl = document.getElementById("scannerVerdictSubtext");
@@ -1483,11 +1568,24 @@ function setScannerVerdict(state, pres = null) {
 
   const conf = pres?.confidence ? Math.round(pres.confidence * 100) : 95;
 
+  if (!ownerEnrolled || state === "NOT_ENROLLED") {
+    textEl.textContent = "⚪ No Owner Enrolled: Enter name & scan face to sign in";
+    textEl.style.color = "#94a3b8";
+    if (badgeEl) {
+      badgeEl.textContent = "Not Enrolled";
+      badgeEl.style.color = "#94a3b8";
+      badgeEl.style.borderColor = "rgba(148,163,184,0.4)";
+    }
+    if (reticleText) reticleText.textContent = "Awaiting Setup";
+    if (subEl) subEl.textContent = "FocusGuard restrictions and 1-minute freeze penalty will only activate when your face is registered.";
+    return;
+  }
+
   if (state === "GUEST_WATCHING") {
     textEl.textContent = "👥 Unrecognized Face: Guest Detected";
     textEl.style.color = "#f59e0b";
     if (badgeEl) {
-      badgeEl.textContent = "Not User (Guest)";
+      badgeEl.textContent = "Not Owner (Guest)";
       badgeEl.style.color = "#f59e0b";
       badgeEl.style.borderColor = "rgba(245,158,11,0.5)";
     }
@@ -1507,7 +1605,7 @@ function setScannerVerdict(state, pres = null) {
     textEl.textContent = `👤 Enrolled Owner: ${currentActiveUser} (${conf}% Match)`;
     textEl.style.color = "#10b981";
     if (badgeEl) {
-      badgeEl.textContent = "Owner Active";
+      badgeEl.textContent = "Owner Verified";
       badgeEl.style.color = "#10b981";
       badgeEl.style.borderColor = "rgba(16,185,129,0.5)";
     }

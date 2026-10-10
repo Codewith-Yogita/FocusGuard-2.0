@@ -62,7 +62,7 @@ active_session = {
     "pause_remaining": 0,
     "current_risk_score": 0,
     "current_drift_state": DriftState.NOMINAL,
-    "user_id": "Eshan",
+    "user_id": None,
     "is_simulated_mode": False
 }
 
@@ -76,6 +76,13 @@ def load_session():
                 active_session.update(saved)
         except Exception:
             pass
+    # If no enrolled owner on disk, ensure user_id starts clean
+    if face_auth_engine:
+        owner = face_auth_engine.get_enrolled_owner()
+        if not owner:
+            active_session["user_id"] = None
+        elif not active_session.get("user_id"):
+            active_session["user_id"] = owner
 
 
 def save_session():
@@ -102,7 +109,7 @@ def load_user_profiles():
                 return json.load(f)
         except Exception:
             pass
-    return {"currentUser": "default_user", "users": {"default_user": []}}
+    return {"currentUser": None, "users": {}}
 
 
 def load_policies():
@@ -276,24 +283,51 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                     save_session()
 
             # Determine who is watching and check presence
-            active_uid = active_session.get("user_id", "Eshan")
-            watcher_status = {
-                "user_id": active_uid,
-                "user_present": True,
-                "is_guest": False,
-                "status": "USER_WATCHING",
-                "confidence": 0.95,
-                "message": f"Enrolled user '{active_uid}' verified watching screen. Focus policies active."
-            }
+            enrolled_owner = face_auth_engine.get_enrolled_owner() if face_auth_engine else None
+            active_uid = active_session.get("user_id") or enrolled_owner
+
+            if not enrolled_owner:
+                watcher_status = {
+                    "owner_enrolled": False,
+                    "enrolled_owner": None,
+                    "user_id": None,
+                    "user_present": False,
+                    "is_guest": True,
+                    "status": "NOT_ENROLLED",
+                    "confidence": 0.0,
+                    "message": "No owner profile enrolled on this device. Sign in with face to activate focus restrictions."
+                }
+            else:
+                watcher_status = {
+                    "owner_enrolled": True,
+                    "enrolled_owner": enrolled_owner,
+                    "user_id": active_uid or enrolled_owner,
+                    "user_present": True,
+                    "is_guest": False,
+                    "status": "USER_WATCHING",
+                    "confidence": 0.95,
+                    "message": f"Enrolled owner '{enrolled_owner}' verified watching screen. Focus policies active."
+                }
+
             if face_auth_engine:
                 try:
-                    res_pres = face_auth_engine.check_presence(user_id=active_uid)
+                    res_pres = face_auth_engine.check_presence(user_id=active_uid or enrolled_owner)
                     watcher_status.update(res_pres)
                 except Exception:
                     pass
 
-            is_owner_watching = (watcher_status.get("status") == "USER_WATCHING" and not watcher_status.get("is_guest") and watcher_status.get("user_present"))
-            pause_reason = "Guest detected — restrictions paused" if watcher_status.get("is_guest") else "User stepped away — restrictions paused"
+            is_owner_watching = (
+                watcher_status.get("status") == "USER_WATCHING"
+                and not watcher_status.get("is_guest")
+                and watcher_status.get("user_present")
+                and watcher_status.get("owner_enrolled")
+            )
+            if not watcher_status.get("owner_enrolled"):
+                pause_reason = "No owner profile enrolled — restrictions paused"
+            elif watcher_status.get("is_guest"):
+                pause_reason = "Guest detected — restrictions paused"
+            else:
+                pause_reason = "User stepped away — restrictions paused"
             intervention_manager.set_restrictions_paused(not is_owner_watching, pause_reason if not is_owner_watching else "")
 
             freeze_punishment = intervention_manager.get_freeze_punishment_status()
@@ -337,7 +371,8 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # 3. Focus Guard 2.0 Insights & Personalization
         if path == "/api/v2/insights":
-            user_id = active_session.get("user_id", "Eshan")
+            enrolled_owner = face_auth_engine.get_enrolled_owner() if face_auth_engine else None
+            user_id = active_session.get("user_id") or enrolled_owner or "default_user"
             insights = personalization_engine.get_user_insights(user_id)
             history = outcome_tracker.get_history(user_id, limit=20)
             return self._send_json(200, {
@@ -347,24 +382,50 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # 4. Face & Presence Status: Who is watching
         if path in ("/api/face/presence", "/api/v2/face/presence"):
-            active_uid = active_session.get("user_id", "Eshan")
-            watcher_status = {
-                "user_id": active_uid,
-                "user_present": True,
-                "is_guest": False,
-                "status": "USER_WATCHING",
-                "confidence": 0.95,
-                "message": f"Enrolled user '{active_uid}' verified watching screen."
-            }
+            enrolled_owner = face_auth_engine.get_enrolled_owner() if face_auth_engine else None
+            active_uid = active_session.get("user_id") or enrolled_owner
+            if not enrolled_owner:
+                watcher_status = {
+                    "owner_enrolled": False,
+                    "enrolled_owner": None,
+                    "user_id": None,
+                    "user_present": False,
+                    "is_guest": True,
+                    "status": "NOT_ENROLLED",
+                    "confidence": 0.0,
+                    "message": "No owner profile enrolled on this device. Sign in with face to activate focus restrictions."
+                }
+            else:
+                watcher_status = {
+                    "owner_enrolled": True,
+                    "enrolled_owner": enrolled_owner,
+                    "user_id": active_uid or enrolled_owner,
+                    "user_present": True,
+                    "is_guest": False,
+                    "status": "USER_WATCHING",
+                    "confidence": 0.95,
+                    "message": f"Enrolled owner '{enrolled_owner}' verified watching screen."
+                }
+
             if face_auth_engine:
                 try:
-                    res_pres = face_auth_engine.check_presence(user_id=active_uid)
+                    res_pres = face_auth_engine.check_presence(user_id=active_uid or enrolled_owner)
                     watcher_status.update(res_pres)
                 except Exception:
                     pass
 
-            is_owner = (watcher_status.get("status") == "USER_WATCHING" and not watcher_status.get("is_guest") and watcher_status.get("user_present"))
-            pause_reason = "Guest detected — restrictions paused" if watcher_status.get("is_guest") else "User away — restrictions paused"
+            is_owner = (
+                watcher_status.get("status") == "USER_WATCHING"
+                and not watcher_status.get("is_guest")
+                and watcher_status.get("user_present")
+                and watcher_status.get("owner_enrolled")
+            )
+            if not watcher_status.get("owner_enrolled"):
+                pause_reason = "No owner profile enrolled — restrictions paused"
+            elif watcher_status.get("is_guest"):
+                pause_reason = "Guest detected — restrictions paused"
+            else:
+                pause_reason = "User away — restrictions paused"
             watcher_status["restrictions_paused"] = not is_owner
             watcher_status["restrictions_pause_reason"] = pause_reason if not is_owner else ""
 
@@ -372,11 +433,14 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # 5. Face & User Profiles
         if path in ("/api/face/users", "/api/users"):
-            active_uid = active_session.get("user_id", "Eshan")
+            enrolled_owner = face_auth_engine.get_enrolled_owner() if face_auth_engine else None
+            active_uid = active_session.get("user_id") or enrolled_owner
             profiles = load_user_profiles()
+            users_list = [enrolled_owner] if enrolled_owner else []
             return self._send_json(200, {
                 "currentUser": active_uid,
-                "users": list(profiles.get("users", {}).keys()) if isinstance(profiles, dict) else ["Eshan", "Yogita"],
+                "enrolledOwner": enrolled_owner,
+                "users": users_list,
                 "profiles": profiles
             })
 
@@ -408,12 +472,14 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # 8. Legacy Face Auth status
         if path == "/api/face/status":
+            enrolled_owner = face_auth_engine.get_enrolled_owner() if face_auth_engine else None
             return self._send_json(200, {
-                "enrolled": True,
+                "enrolled": bool(enrolled_owner),
+                "enrolledOwner": enrolled_owner,
                 "cameraReady": True,
                 "activeEngine": "OpenCV-SFace" if HAS_FACE_AUTH else "Virtual-Secure-Biometrics",
                 "hardwareBound": True,
-                "currentUser": active_session.get("user_id", "Eshan")
+                "currentUser": active_session.get("user_id") or enrolled_owner
             })
 
         # 8. Focus Guard Architecture & Foundation Status
@@ -648,23 +714,36 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
             is_productive = (classification == "ALIGNED")
 
             # Biometric Presence Check: Only enforce restrictions if enrolled owner is watching
-            active_uid = active_session.get("user_id", "Eshan")
+            enrolled_owner = face_auth_engine.get_enrolled_owner() if face_auth_engine else None
+            active_uid = active_session.get("user_id") or enrolled_owner
             watcher_status = {
+                "owner_enrolled": bool(enrolled_owner),
+                "enrolled_owner": enrolled_owner,
                 "user_id": active_uid,
-                "user_present": True,
-                "is_guest": False,
-                "status": "USER_WATCHING",
-                "confidence": 0.95
+                "user_present": bool(enrolled_owner),
+                "is_guest": not bool(enrolled_owner),
+                "status": "USER_WATCHING" if enrolled_owner else "NOT_ENROLLED",
+                "confidence": 0.95 if enrolled_owner else 0.0
             }
             if face_auth_engine:
                 try:
-                    res_pres = face_auth_engine.check_presence(user_id=active_uid)
+                    res_pres = face_auth_engine.check_presence(user_id=active_uid or enrolled_owner)
                     watcher_status.update(res_pres)
                 except Exception:
                     pass
 
-            is_owner_watching = (watcher_status.get("status") == "USER_WATCHING" and not watcher_status.get("is_guest") and watcher_status.get("user_present"))
-            pause_reason = "Guest detected — restrictions paused" if watcher_status.get("is_guest") else "User away — restrictions paused"
+            is_owner_watching = (
+                watcher_status.get("status") == "USER_WATCHING"
+                and not watcher_status.get("is_guest")
+                and watcher_status.get("user_present")
+                and watcher_status.get("owner_enrolled")
+            )
+            if not watcher_status.get("owner_enrolled"):
+                pause_reason = "No owner profile enrolled — restrictions paused"
+            elif watcher_status.get("is_guest"):
+                pause_reason = "Guest detected — restrictions paused"
+            else:
+                pause_reason = "User away — restrictions paused"
             intervention_manager.set_restrictions_paused(not is_owner_watching, pause_reason if not is_owner_watching else "")
 
             # Check excess distraction trigger for 1-minute freeze punishment (Instagram, Shorts, Texting)
@@ -705,7 +784,7 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
             )
             risk_eval = risk_scorer.calculate_risk_score(drift_eval)
 
-            user_id = active_session.get("user_id", "Eshan")
+            user_id = active_session.get("user_id") or (face_auth_engine.get_enrolled_owner() if face_auth_engine else None) or "default_user"
             personalization = personalization_engine.get_user_insights(user_id)
             rec = ai_engine.generate_recommendation(
                 intent=intent,
@@ -793,9 +872,15 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 target_sim = step_descriptions.get(int(scenario_step), step_descriptions[1])
 
             # If step 7 triggered, check if owner is watching before enforcing freeze punishment!
-            active_uid = active_session.get("user_id", "Eshan")
-            watcher_status = face_auth_engine.check_presence(user_id=active_uid) if face_auth_engine else {"status": "USER_WATCHING", "user_present": True}
-            is_owner_watching = (watcher_status.get("status") == "USER_WATCHING" and not watcher_status.get("is_guest") and watcher_status.get("user_present"))
+            enrolled_owner = face_auth_engine.get_enrolled_owner() if face_auth_engine else None
+            active_uid = active_session.get("user_id") or enrolled_owner
+            watcher_status = face_auth_engine.check_presence(user_id=active_uid) if face_auth_engine else {"status": "NOT_ENROLLED" if not enrolled_owner else "USER_WATCHING", "user_present": bool(enrolled_owner), "owner_enrolled": bool(enrolled_owner)}
+            is_owner_watching = (
+                watcher_status.get("status") == "USER_WATCHING"
+                and not watcher_status.get("is_guest")
+                and watcher_status.get("user_present")
+                and watcher_status.get("owner_enrolled", bool(enrolled_owner))
+            )
 
             if int(scenario_step) == 7:
                 if is_owner_watching:
@@ -860,7 +945,8 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
         # 10. Face & Presence Status Update (Scan / Simulate / Camera frame)
         if path in ("/api/face/presence", "/api/v2/face/presence"):
             sim_state = payload.get("simulate_state") # "USER_WATCHING", "GUEST_WATCHING", "AWAY"
-            req_user = payload.get("user_id", active_session.get("user_id", "Eshan"))
+            enrolled_owner = face_auth_engine.get_enrolled_owner() if face_auth_engine else None
+            req_user = payload.get("user_id") or active_session.get("user_id") or enrolled_owner
             img_data = payload.get("image")
 
             if sim_state and face_auth_engine:
@@ -871,22 +957,47 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                     face_auth_engine.simulated_user = req_user
                 save_session()
 
-            pres = {
-                "user_id": req_user,
-                "user_present": True,
-                "is_guest": False,
-                "status": "USER_WATCHING",
-                "confidence": 0.95,
-                "message": f"Enrolled user '{req_user}' verified watching screen."
-            }
+            if not enrolled_owner:
+                pres = {
+                    "owner_enrolled": False,
+                    "enrolled_owner": None,
+                    "user_id": None,
+                    "user_present": False,
+                    "is_guest": True,
+                    "status": "NOT_ENROLLED",
+                    "confidence": 0.0,
+                    "message": "No owner profile enrolled on this device. Sign in with face to activate focus restrictions."
+                }
+            else:
+                pres = {
+                    "owner_enrolled": True,
+                    "enrolled_owner": enrolled_owner,
+                    "user_id": req_user or enrolled_owner,
+                    "user_present": True,
+                    "is_guest": False,
+                    "status": "USER_WATCHING",
+                    "confidence": 0.95,
+                    "message": f"Enrolled owner '{enrolled_owner}' verified watching screen."
+                }
+
             if face_auth_engine:
                 try:
-                    pres = face_auth_engine.check_presence(user_id=req_user, image=img_data)
+                    pres = face_auth_engine.check_presence(user_id=req_user or enrolled_owner, image=img_data)
                 except Exception:
                     pass
 
-            is_owner = (pres.get("status") == "USER_WATCHING" and not pres.get("is_guest") and pres.get("user_present"))
-            pause_reason = "Guest detected — restrictions paused" if pres.get("is_guest") else "User away — restrictions paused"
+            is_owner = (
+                pres.get("status") == "USER_WATCHING"
+                and not pres.get("is_guest")
+                and pres.get("user_present")
+                and pres.get("owner_enrolled")
+            )
+            if not pres.get("owner_enrolled"):
+                pause_reason = "No owner profile enrolled — restrictions paused"
+            elif pres.get("is_guest"):
+                pause_reason = "Guest detected — restrictions paused"
+            else:
+                pause_reason = "User away — restrictions paused"
             intervention_manager.set_restrictions_paused(not is_owner, pause_reason if not is_owner else "")
             pres["restrictions_paused"] = not is_owner
             pres["restrictions_pause_reason"] = pause_reason if not is_owner else ""
@@ -895,7 +1006,9 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # 11. Face Enrollment as Owner (Biometric Registration)
         if path in ("/api/face/enroll", "/api/v2/face/enroll"):
-            req_user = payload.get("user_id") or active_session.get("user_id", "Eshan")
+            req_user = (payload.get("user_id") or "").strip()
+            if not req_user:
+                return self._send_json(400, {"success": False, "message": "Please enter your name to register as device owner."})
             img_data = payload.get("image")
             frames = payload.get("frames")
 
@@ -922,22 +1035,54 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                         face_auth_engine.simulated_state = "USER_WATCHING"
                         intervention_manager.set_restrictions_paused(False)
                         save_session()
+                        # Update user_profiles.json
+                        try:
+                            profiles = load_user_profiles()
+                            profiles["currentUser"] = req_user
+                            if "users" not in profiles or not isinstance(profiles["users"], dict):
+                                profiles["users"] = {}
+                            profiles["users"] = {req_user: []} # Clean slate: bind exclusively to enrolled owner
+                            with open(PROFILES_FILE, "w", encoding="utf-8") as pf:
+                                json.dump(profiles, pf, indent=2)
+                        except Exception:
+                            pass
                 except Exception as ex:
                     res_enroll = {"success": False, "status": "error", "message": str(ex)}
 
             return self._send_json(200 if res_enroll.get("success") else 400, res_enroll)
 
-        # 12. User Profile Switch (Eshan / Yogita)
+        # 12. User Profile Switch
         if path in ("/api/face/switch", "/api/users/switch"):
-            uid = payload.get("user_id", "Eshan")
-            active_session["user_id"] = uid
+            uid = (payload.get("user_id") or "").strip()
+            enrolled_owner = face_auth_engine.get_enrolled_owner() if face_auth_engine else None
+            target_user = uid or enrolled_owner
+            active_session["user_id"] = target_user
             if face_auth_engine:
-                face_auth_engine.simulated_user = uid
+                face_auth_engine.simulated_user = target_user
             save_session()
             return self._send_json(200, {
                 "success": True,
-                "currentUser": uid,
-                "message": f"Switched to profile: {uid}"
+                "currentUser": target_user,
+                "message": f"Switched to profile: {target_user}"
+            })
+
+        # 13. Face & Profile Reset (Clear all biometric data and return to clean slate)
+        if path in ("/api/face/reset", "/api/v2/face/reset"):
+            if face_auth_engine:
+                face_auth_engine.clear_all_templates()
+            active_session["user_id"] = None
+            save_session()
+            intervention_manager.set_restrictions_paused(True, "No owner enrolled — restrictions paused")
+            intervention_manager.clear_freeze_punishment()
+            # Reset user_profiles.json
+            try:
+                with open(PROFILES_FILE, "w", encoding="utf-8") as pf:
+                    json.dump({"currentUser": None, "focusSessionActive": False, "users": {}}, pf, indent=2)
+            except Exception:
+                pass
+            return self._send_json(200, {
+                "success": True,
+                "message": "All face embeddings and user profiles cleared. Fresh start ready."
             })
 
         return self._send_json(404, {"error": "Endpoint not found"})

@@ -72,10 +72,10 @@
         <!-- User Presence & Profile Widget -->
         <div class="user-presence-wrapper" id="userPresenceWrapper">
           <div class="user-presence-pill" id="userPresencePill" onclick="toggleUserDropdown(event)" title="Click to manage user profile, face login, and presence guard">
-            <div class="presence-avatar" id="userAvatarText">ES</div>
+            <div class="presence-avatar" id="userAvatarText">👤</div>
             <div class="presence-info">
-              <span class="presence-user-name" id="headerUserName">Eshan</span>
-              <span class="presence-status-label" id="headerPresenceStatus">🟢 Watching</span>
+              <span class="presence-user-name" id="headerUserName">Sign In</span>
+              <span class="presence-status-label" id="headerPresenceStatus">⚪ Not Enrolled (Guest Mode)</span>
             </div>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
@@ -93,7 +93,7 @@
             <!-- Face Login CTA Button -->
             <div style="padding: 0.75rem 0.85rem; background: rgba(99, 102, 241, 0.08); border-bottom: 1px solid var(--border-subtle); display:flex; flex-direction:column; gap:0.45rem;">
               <button class="btn-action primary" style="font-size: 0.78rem; padding: 0.5rem; justify-content: center; width: 100%; font-weight: 700;" onclick="openFaceScannerModal(true)">
-                📷 Face Login & Register Owner
+                📷 Sign In / Register Face
               </button>
               <button id="btnToggleLiveGuard" class="btn-chip" style="font-size: 0.72rem; padding: 0.35rem; justify-content: center; background: rgba(255, 255, 255, 0.06); color: #94a3b8; width: 100%;" onclick="toggleContinuousFaceGuard()">
                 🛡️ Live Camera Auto-Detect: <strong id="lblLiveGuardStatus" style="color: #34d399; margin-left: 3px;">ACTIVE</strong>
@@ -101,21 +101,23 @@
             </div>
 
             <div style="padding: 0.5rem 0.85rem 0.3rem;">
-              <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700;">Enrolled Profiles</span>
+              <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700;">Enrolled Device Owner</span>
             </div>
-            <div class="dropdown-user-option active" id="userOptionEshan" onclick="switchUserProfile('Eshan')">
-              <div class="avatar-sm">ES</div>
-              <div>
-                <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Eshan (Enrolled Owner)</div>
-                <div style="font-size: 0.72rem; color: var(--text-muted);">Restrictions active when watching</div>
+            <div id="dropdownEnrolledUserCard" style="padding: 0.2rem 0.85rem 0.6rem;">
+              <div style="display: flex; align-items: center; gap: 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 0.5rem 0.7rem;">
+                <div class="avatar-sm" id="dropdownOwnerAvatar">👤</div>
+                <div style="flex: 1; overflow: hidden;">
+                  <div style="font-weight: 600; font-size: 0.82rem; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" id="dropdownOwnerName">No Owner Enrolled Yet</div>
+                  <div style="font-size: 0.7rem; color: var(--text-muted);" id="dropdownOwnerSub">Sign in with face to activate focus guard</div>
+                </div>
               </div>
             </div>
-            <div class="dropdown-user-option" id="userOptionYogita" onclick="switchUserProfile('Yogita')">
-              <div class="avatar-sm">YO</div>
-              <div>
-                <div style="font-weight: 600; font-size: 0.85rem; color: #fff;">Yogita</div>
-                <div style="font-size: 0.72rem; color: var(--text-muted);">Research & deep work profile</div>
-              </div>
+
+            <!-- Reset / Delete stored face data button -->
+            <div style="padding: 0 0.85rem 0.6rem;">
+              <button class="btn-chip" style="width: 100%; justify-content: center; font-size: 0.72rem; padding: 0.35rem; color: #f87171; border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.08);" onclick="resetBiometricData()">
+                🗑️ Reset & Delete Stored Face Data
+              </button>
             </div>
 
             <div class="dropdown-divider"></div>
@@ -179,12 +181,12 @@
       <div style="display: flex; align-items: center; gap: 0.6rem;">
         <span style="font-size: 1.2rem;">👥</span>
         <div>
-          <strong>Guest Detected at Screen:</strong>
-          <span style="margin-left: 0.35rem; color: #fef3c7;">Distraction restrictions paused so your guest is not blocked.</span>
+          <strong id="guestAlertTitle">Guest Detected at Screen:</strong>
+          <span style="margin-left: 0.35rem; color: #fef3c7;" id="guestAlertDesc">Focus restrictions paused — free browsing allowed.</span>
         </div>
       </div>
-      <button class="btn-chip" style="background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #fff;" onclick="switchUserProfile('Eshan')">
-        Resume Eshan's Focus Rules
+      <button id="btnResumeOwnerFocus" class="btn-chip" style="background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; color: #fff;" onclick="openFaceScannerModal(true)">
+        Verify Owner Face
       </button>
     </div>
 
@@ -505,7 +507,7 @@
     <div class="face-scanner-card" style="max-width: 500px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <div style="display:flex; align-items:center; gap:8px;">
-          <div class="presence-avatar" id="modalScannerAvatar">ES</div>
+          <div class="presence-avatar" id="modalScannerAvatar">👤</div>
           <div style="text-align:left;">
             <div style="font-weight:700; font-size:1rem; color:#fff;">Biometric Face Login & Guard</div>
             <div style="font-size:0.72rem; color:var(--text-muted);">Scan face to lock restrictions to enrolled owner</div>
@@ -520,7 +522,7 @@
           Enrolled User Name:
         </label>
         <div style="display: flex; gap: 8px;">
-          <input type="text" id="faceLoginUsername" value="Eshan" placeholder="Enter username (e.g. Eshan)" class="input-text" style="font-size: 0.88rem; padding: 0.45rem 0.75rem; background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; color: #fff; flex: 1;" onchange="syncUsernameInput()" />
+          <input type="text" id="faceLoginUsername" value="" placeholder="Enter your name (e.g. Yogita)" class="input-text" style="font-size: 0.88rem; padding: 0.45rem 0.75rem; background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; color: #fff; flex: 1;" onchange="syncUsernameInput()" />
           <button class="btn-chip" style="font-size: 0.75rem; padding: 0.45rem 0.85rem; background: rgba(99,102,241,0.2); border-color: rgba(99,102,241,0.5); color: #fff;" onclick="syncUsernameInput()">
             Save Name
           </button>
@@ -545,11 +547,11 @@
       <div id="scannerVerdictCard" style="background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:12px; padding:12px; margin-bottom:14px; text-align: left;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
           <span style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Biometric Recognition Status</span>
-          <span id="scannerVerdictBadge" class="btn-chip" style="font-size:0.65rem; padding:1px 6px; color:#10b981; border-color:rgba(16,185,129,0.4);">Ready</span>
+          <span id="scannerVerdictBadge" class="btn-chip" style="font-size:0.65rem; padding:1px 6px; color:#94a3b8; border-color:rgba(148,163,184,0.4);">Not Enrolled</span>
         </div>
-        <div id="scannerVerdictText" style="font-weight:700; font-size:1rem; color:#10b981;">👤 User Verified: Eshan (Active)</div>
+        <div id="scannerVerdictText" style="font-weight:700; font-size:1rem; color:#94a3b8;">⚪ No Owner Enrolled: Enter name & scan face to sign in</div>
         <div id="scannerVerdictSubtext" style="font-size:0.75rem; color:#94a3b8; margin-top:3px; line-height: 1.35;">
-          Enrolled owner active. Focus limits & 1-min freeze penalty will ONLY apply when you are detected.
+          FocusGuard restrictions and 1-minute freeze penalty will only activate when your face is recognized.
         </div>
       </div>
 

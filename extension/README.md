@@ -47,7 +47,7 @@ When you visit a distracting site (such as **Instagram Reels, YouTube Shorts, Wh
 ## 🎛️ Extension Popup Features
 
 Clicking the Focus Guard 2.0 extension icon in your browser toolbar reveals the companion widget:
-- **👤 Who's Watching**: Displays active biometric status (e.g., *Eshan (Watching)* or *Guest Paused*).
+- **👤 Who's Watching**: Displays active biometric status (e.g., *Owner (Watching)*, *Guest Paused*, or *Not Enrolled*).
 - **Session Status**: Shows current session mode (`FLOW STATE`, `DRIFT_WARNING`, `COMPLETED`).
 - **Distraction Risk Meter**: Real-time 0–100% risk score and level.
 - **Drift State**: Live drift classification (`Nominal`, `Mild`, `Moderate`, `Acute`).

@@ -143,8 +143,7 @@ Level 0 (Flow State) ➔ Level 1 (Awareness) ➔ Level 2 (Suggestion) ➔ Level 
 
 ### 10. Local Biometric Presence & "Who's Watching" Security
 - **Local Face Authentication**: Powered by OpenCV YuNet (face detection) and SFace ONNX (128-d cosine similarity embeddings).
-- **Windows DPAPI Security**: Face templates are encrypted using Windows Data Protection API (`CryptProtectData`), tied directly to the Windows user credential store.
-- **Multi-User Profile Switching**: Supports distinct profiles (e.g., **Eshan** - Enrolled Owner, **Yogita** - Research profile).
+- **Dynamic Biometric Owner Registration**: Zero hardcoded users. Any device owner signs in by typing their name and scanning their face. Face embeddings are securely DPAPI-protected.
 - **Guest Presence Detection**: When an unenrolled guest is detected looking at the screen, focus restrictions automatically pause so the guest is not disrupted.
 - **Webcam Scanner Modal**: Includes a real-time in-dashboard camera scanner with facial reticle and landmark liveness verification.
 
@@ -254,7 +253,8 @@ Focus Guard 2.0 provides a clean RESTful control plane on port `8000`:
 | `POST` | `/api/v2/punishment/clear` | Manually lifts the 1-Minute Tab Freeze penalty. |
 | `GET` / `POST` | `/api/face/presence` | Checks or simulates biometric presence (`USER_WATCHING`, `GUEST_WATCHING`, `AWAY`). |
 | `GET` | `/api/face/users` | Lists registered user profiles and active user. |
-| `POST` | `/api/users/switch` | Switches active user profile (e.g., Eshan ⇄ Yogita). |
+| `POST` | `/api/face/enroll` | Enrolls live face biometric template bound to specified owner. |
+| `POST` | `/api/face/reset` | Clears all biometric data and returns system to clean slate. |
 | `POST` | `/api/goal/evaluate` | Browser extension bridge for real-time URL and DOM evaluation. |
 | `GET` | `/api/v2/architecture` | Returns paradigm comparison (v1 binary foundation vs. 2.0 adaptive assistant). |
 
@@ -337,7 +337,7 @@ FocusGuard2.0/
 ├── run_focusguard.bat              # One-click Windows batch launcher
 ├── package.json                    # npm runner scripts (npm start / npm run dev)
 ├── policies.json                   # Foundational binary policy definitions
-└── user_profiles.json              # Biometric user profiles (Eshan, Yogita)
+└── user_profiles.json              # Dynamic biometric owner profiles
 ```
 
 ---

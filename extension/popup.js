@@ -24,14 +24,17 @@ async function fetchStatus() {
     const watchingEl = document.getElementById("watching-status");
     if (watchingEl && data.who_is_watching) {
       const w = data.who_is_watching;
-      if (w.is_guest) {
+      if (w.owner_enrolled === false || w.status === "NOT_ENROLLED") {
+        watchingEl.textContent = "⚪ Not Enrolled (Guest Mode)";
+        watchingEl.className = "val";
+      } else if (w.is_guest) {
         watchingEl.textContent = "👥 Guest Detected (Paused)";
         watchingEl.className = "val val-warn";
       } else if (w.status === "AWAY") {
-        watchingEl.textContent = "⚪ User Away (No Face)";
+        watchingEl.textContent = `⚪ ${w.enrolled_owner || w.user_id || "Owner"} Away (Paused)`;
         watchingEl.className = "val";
       } else {
-        watchingEl.textContent = `👤 ${w.user_id || "User"} (Watching)`;
+        watchingEl.textContent = `👤 ${w.enrolled_owner || w.user_id || "Owner"} (Watching)`;
         watchingEl.className = "val val-good";
       }
     }

@@ -13,7 +13,10 @@ if ROOT_DIR not in sys.path:
 if os.path.join(ROOT_DIR, "tools") not in sys.path:
     sys.path.insert(0, os.path.join(ROOT_DIR, "tools"))
 
-from ui.server import wsgi_app, FocusGuardRequestHandler
+try:
+    from server import wsgi_app, FocusGuardRequestHandler
+except ImportError:
+    from ui.server import wsgi_app, FocusGuardRequestHandler
 
 def app(environ, start_response):
     return wsgi_app(environ, start_response)

@@ -1300,6 +1300,48 @@ let webcamScanInterval = null;
 let continuousFaceGuardInterval = null;
 let isContinuousFaceGuardActive = false;
 
+let isAutoEnrolling = false;
+let usernameDebounceTimer = null;
+
+function showToast(message, duration = 4000) {
+  let toastEl = document.getElementById("focusguardToast");
+  if (!toastEl) {
+    toastEl = document.createElement("div");
+    toastEl.id = "focusguardToast";
+    toastEl.style.cssText = `
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #f8fafc;
+      padding: 12px 24px;
+      border-radius: 9999px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(16, 185, 129, 0.25);
+      z-index: 999999;
+      opacity: 0;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: none;
+    `;
+    document.body.appendChild(toastEl);
+  }
+  toastEl.innerHTML = message;
+  toastEl.style.opacity = "1";
+  toastEl.style.transform = "translateX(-50%) translateY(0px)";
+
+  setTimeout(() => {
+    toastEl.style.opacity = "0";
+    toastEl.style.transform = "translateX(-50%) translateY(-20px)";
+  }, duration);
+}
+
 function syncUsernameInput() {
   const inputEl = document.getElementById("faceLoginUsername");
   if (inputEl && inputEl.value.trim()) {
@@ -1322,6 +1364,33 @@ function syncUsernameInput() {
   }
 }
 
+function onUsernameInputChanged() {
+  clearTimeout(usernameDebounceTimer);
+  const inputEl = document.getElementById("faceLoginUsername");
+  if (!inputEl) return;
+  const val = inputEl.value.trim();
+  if (val) {
+    currentActiveUser = val;
+    const modalAvatar = document.getElementById("modalScannerAvatar");
+    if (modalAvatar) modalAvatar.textContent = val.substring(0, 2).toUpperCase();
+  }
+  usernameDebounceTimer = setTimeout(() => {
+    syncUsernameInput();
+    if (!ownerEnrolled && val.length >= 2) {
+      const badge = document.getElementById("autoCaptureStatusBadge");
+      if (badge) badge.textContent = "⚡ Ready to Auto-Capture Face";
+      if (webcamStream && webcamStream.active) {
+        scanLiveWebcamFrame();
+      }
+    }
+  }, 500);
+}
+
+function triggerFaceEnrollment() {
+  syncUsernameInput();
+  enrollCurrentUserFace();
+}
+
 function captureWebcamFrame(useBackground = false) {
   let videoEl = document.getElementById("scannerVideo");
   let canvasEl = document.getElementById("scannerCanvas");
@@ -1339,6 +1408,35 @@ function captureWebcamFrame(useBackground = false) {
   const ctx = canvasEl.getContext("2d");
   ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
   return canvasEl.toDataURL("image/jpeg", 0.7);
+}
+
+function checkAutoEnrollTrigger(pres) {
+  if (ownerEnrolled || isAutoEnrolling) return;
+
+  const modal = document.getElementById("faceScannerModal");
+  if (!modal || modal.style.display === "none") return;
+
+  const inputEl = document.getElementById("faceLoginUsername");
+  const typedName = inputEl ? inputEl.value.trim() : "";
+  if (!typedName || typedName.length < 2) return;
+
+  // If face is present in camera frame!
+  const isFacePresent = pres?.present !== false && pres?.status !== "AWAY" && pres?.reason !== "no_face";
+
+  if (isFacePresent) {
+    const reticleText = document.getElementById("reticleStatusText");
+    const autoBadge = document.getElementById("autoCaptureStatusBadge");
+    const btn = document.getElementById("btnEnrollFace");
+
+    if (autoBadge) autoBadge.textContent = "⚡ Face Detected: Auto-Saving...";
+    if (reticleText) reticleText.textContent = "Face Locked: Auto-Saving...";
+    if (btn) btn.innerHTML = `<span>⏳ Auto-Capturing Embedding for '${typedName}'...</span>`;
+
+    isAutoEnrolling = true;
+    setTimeout(() => {
+      enrollCurrentUserFace();
+    }, 700);
+  }
 }
 
 async function scanLiveWebcamFrame() {
@@ -1359,6 +1457,9 @@ async function scanLiveWebcamFrame() {
       currentPresenceState = status;
       setScannerVerdict(status, pres);
       updateWhoIsWatchingUI(pres, pres.user_id || currentActiveUser);
+
+      // Automatic biometric embedding capture when user and face are ready!
+      checkAutoEnrollTrigger(pres);
     }
   } catch (err) {
     console.warn("Live face scan note:", err);
@@ -1384,7 +1485,7 @@ function openFaceScannerModal(triggerEnroll = false) {
         if (currentActiveUser) {
           subEl.textContent = `Camera active. Look straight at webcam with username '${currentActiveUser}' and click 'Scan & Save Face as Enrolled Owner'.`;
         } else {
-          subEl.textContent = "Camera active. Enter your name above and click 'Scan & Save Face as Enrolled Owner'.";
+          subEl.textContent = "Camera active. Enter your name above and your face embedding will auto-capture!";
         }
       }
     }
@@ -1394,6 +1495,8 @@ function openFaceScannerModal(triggerEnroll = false) {
 function closeFaceScannerModal() {
   const modal = document.getElementById("faceScannerModal");
   if (modal) modal.style.display = "none";
+  isAutoEnrolling = false;
+
   if (webcamScanInterval) {
     clearInterval(webcamScanInterval);
     webcamScanInterval = null;
@@ -1410,6 +1513,13 @@ function closeFaceScannerModal() {
   if (feedSim) feedSim.style.display = "flex";
   const btn = document.getElementById("btnStartWebcam");
   if (btn) btn.innerHTML = "<span>🎥 Start Camera</span>";
+
+  const returnBtn = document.getElementById("btnReturnToDashboard");
+  if (returnBtn) {
+    returnBtn.innerHTML = "<span>⬅️ Return to Focus Dashboard</span>";
+    returnBtn.style.background = "rgba(255, 255, 255, 0.08)";
+    returnBtn.style.borderColor = "rgba(255, 255, 255, 0.18)";
+  }
 }
 
 async function startWebcamCapture() {
@@ -1448,13 +1558,17 @@ async function startWebcamCapture() {
 
 async function enrollCurrentUserFace() {
   const btn = document.getElementById("btnEnrollFace");
+  const returnBtn = document.getElementById("btnReturnToDashboard");
   const textEl = document.getElementById("scannerVerdictText");
   const subEl = document.getElementById("scannerVerdictSubtext");
   const badgeEl = document.getElementById("scannerVerdictBadge");
+  const reticleText = document.getElementById("reticleStatusText");
+  const autoBadge = document.getElementById("autoCaptureStatusBadge");
   const inputEl = document.getElementById("faceLoginUsername");
 
   const targetUser = (inputEl ? inputEl.value.trim() : "") || currentActiveUser;
   if (!targetUser) {
+    isAutoEnrolling = false;
     alert("Please enter your name (e.g. Yogita) before scanning your face!");
     if (inputEl) inputEl.focus();
     return;
@@ -1467,7 +1581,8 @@ async function enrollCurrentUserFace() {
   }
 
   const imgData = captureWebcamFrame();
-  if (btn) btn.innerHTML = "<span>⏳ Capturing Face & Generating 128-D Biometric Embedding...</span>";
+  if (btn) btn.innerHTML = `<span>⏳ Capturing Face & Generating 128-D Biometric Embedding...</span>`;
+  if (reticleText) reticleText.textContent = "Generating Biometrics...";
 
   try {
     const res = await fetch("/api/face/enroll", {
@@ -1482,9 +1597,18 @@ async function enrollCurrentUserFace() {
     if (data.success) {
       ownerEnrolled = true;
       currentPresenceState = "USER_WATCHING";
-      if (btn) btn.innerHTML = "<span>✅ Enrolled & Logged In!</span>";
+      if (btn) {
+        btn.innerHTML = `<span>✅ Face Verified & Saved for ${targetUser}!</span>`;
+        btn.style.background = "linear-gradient(135deg, #10b981, #047857)";
+      }
+      if (returnBtn) {
+        returnBtn.innerHTML = `<span>🚀 Launching Focus Dashboard...</span>`;
+        returnBtn.style.background = "linear-gradient(135deg, #6366f1, #4f46e5)";
+        returnBtn.style.color = "#ffffff";
+        returnBtn.style.borderColor = "#818cf8";
+      }
       if (textEl) {
-        textEl.textContent = `✨ Enrolled Owner: ${targetUser} (Active)`;
+        textEl.textContent = `🎉 Face Verified & Enrolled: ${targetUser}`;
         textEl.style.color = "#10b981";
       }
       if (badgeEl) {
@@ -1492,8 +1616,16 @@ async function enrollCurrentUserFace() {
         badgeEl.style.color = "#10b981";
         badgeEl.style.borderColor = "rgba(16,185,129,0.5)";
       }
+      if (reticleText) {
+        reticleText.textContent = "Owner Verified";
+        reticleText.style.color = "#34d399";
+      }
+      if (autoBadge) {
+        autoBadge.textContent = "✅ Enrolled";
+        autoBadge.style.color = "#10b981";
+      }
       if (subEl) {
-        subEl.textContent = `Your biometric face profile is registered & DPAPI-protected for '${targetUser}'. FocusGuard restrictions will now ONLY apply when you are in front of this laptop.`;
+        subEl.textContent = `Biometric face embedding securely encrypted & saved. Opening your FocusGuard dashboard now...`;
       }
       startContinuousFaceGuard();
       updateWhoIsWatchingUI({
@@ -1506,11 +1638,15 @@ async function enrollCurrentUserFace() {
         confidence: 0.96
       }, targetUser);
 
+      // Automatic redirect back to dashboard after 1.1 seconds!
       setTimeout(() => {
-        if (btn) btn.innerHTML = "<span>✨ Scan & Save Face as Enrolled Owner</span>";
-      }, 4000);
-      pollLiveTelemetry();
+        closeFaceScannerModal();
+        showToast(`🎉 Welcome ${targetUser}! Face profile saved. FocusGuard is now active.`);
+        pollLiveTelemetry();
+      }, 1100);
+
     } else {
+      isAutoEnrolling = false;
       if (btn) btn.innerHTML = "<span>❌ Enrollment Failed</span>";
       if (subEl) subEl.textContent = data.message || "Could not detect clear face. Center your face in lighting.";
       setTimeout(() => {
@@ -1518,6 +1654,7 @@ async function enrollCurrentUserFace() {
       }, 3000);
     }
   } catch (err) {
+    isAutoEnrolling = false;
     console.error("Enroll face error:", err);
     if (btn) btn.innerHTML = "<span>✨ Scan & Save Face as Enrolled Owner</span>";
   }

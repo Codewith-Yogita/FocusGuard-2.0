@@ -513,18 +513,23 @@
             <div style="font-size:0.72rem; color:var(--text-muted);">Scan face to lock restrictions to enrolled owner</div>
           </div>
         </div>
-        <button class="btn-chip" onclick="closeFaceScannerModal()" style="padding:0.25rem 0.6rem;">✕</button>
+        <button class="btn-chip" onclick="closeFaceScannerModal()" style="padding:0.35rem 0.8rem; font-weight:700; color:#e2e8f0; background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); display:flex; align-items:center; gap:5px;">
+          ✕ Return to Dashboard
+        </button>
       </div>
 
       <!-- User Name Field -->
       <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; text-align: left;">
-        <label style="font-size: 0.72rem; color: #a5b4fc; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">
-          Enrolled User Name:
-        </label>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label style="font-size: 0.72rem; color: #a5b4fc; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+            Enrolled User Name:
+          </label>
+          <span id="autoCaptureStatusBadge" style="font-size: 0.68rem; color: #34d399; font-weight: 600;">✨ Auto-Capture Ready</span>
+        </div>
         <div style="display: flex; gap: 8px;">
-          <input type="text" id="faceLoginUsername" value="" placeholder="Enter your name (e.g. Yogita)" class="input-text" style="font-size: 0.88rem; padding: 0.45rem 0.75rem; background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; color: #fff; flex: 1;" onchange="syncUsernameInput()" />
-          <button class="btn-chip" style="font-size: 0.75rem; padding: 0.45rem 0.85rem; background: rgba(99,102,241,0.2); border-color: rgba(99,102,241,0.5); color: #fff;" onclick="syncUsernameInput()">
-            Save Name
+          <input type="text" id="faceLoginUsername" value="" placeholder="Type your name (e.g. Yogita) & look at camera" class="input-text" style="font-size: 0.88rem; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; color: #fff; flex: 1;" oninput="onUsernameInputChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault(); triggerFaceEnrollment();}" />
+          <button class="btn-chip" style="font-size: 0.75rem; padding: 0.45rem 0.85rem; background: rgba(99,102,241,0.25); border-color: rgba(99,102,241,0.5); color: #fff; font-weight:700;" onclick="triggerFaceEnrollment()">
+            ⚡ Capture Face
           </button>
         </div>
       </div>
@@ -557,9 +562,15 @@
 
       <!-- Test simulation & enrollment actions -->
       <div style="display:flex; flex-direction:column; gap:8px;">
-        <button id="btnEnrollFace" class="btn-action" style="background: linear-gradient(135deg, #10b981, #059669); color: white; justify-content:center; padding:11px; font-weight:700; font-size: 0.9rem;" onclick="enrollCurrentUserFace()">
+        <button id="btnEnrollFace" class="btn-action" style="background: linear-gradient(135deg, #10b981, #059669); color: white; justify-content:center; padding:12px; font-weight:700; font-size: 0.92rem; box-shadow: 0 4px 14px rgba(16,185,129,0.3);" onclick="enrollCurrentUserFace()">
           <span>✨ Scan & Save Face as Enrolled Owner</span>
         </button>
+
+        <!-- Dedicated Return to Dashboard Button -->
+        <button id="btnReturnToDashboard" class="btn-action" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255,255,255,0.18); color: #f1f5f9; justify-content:center; padding:10px; font-weight:700; font-size: 0.88rem;" onclick="closeFaceScannerModal()">
+          <span>⬅️ Return to Focus Dashboard</span>
+        </button>
+
         <div style="display:flex; gap:8px;">
           <button id="btnStartWebcam" class="btn-action primary" style="flex:1; justify-content:center; padding:8px; font-size: 0.78rem;" onclick="startWebcamCapture()">
             <span>🎥 Start Camera</span>

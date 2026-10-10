@@ -958,6 +958,11 @@ async function triggerSimulatorStep(stepNum) {
   // Client-side fallback simulation
   applySimulatorStepLocally(stepNum);
 
+  // Trigger realistic in-page extension overlays if Extension Sim is ON
+  if (typeof isExtensionSimActive !== "undefined" && isExtensionSimActive) {
+    handleExtensionSimOverlaysForStep(stepNum);
+  }
+
   try {
     await fetch("/api/v2/simulator/step", {
       method: "POST",
@@ -972,6 +977,9 @@ async function triggerSimulatorStep(stepNum) {
 async function resetSimulator() {
   document.querySelectorAll(".demo-step-btn").forEach(b => b.classList.remove("active"));
   applySimulatorStepLocally(1);
+  if (typeof closeExtensionBanner === "function") closeExtensionBanner();
+  if (typeof closeExtensionMindMirror === "function") closeExtensionMindMirror();
+  if (typeof closeFrozenScreenDemoModal === "function") closeFrozenScreenDemoModal();
   try {
     await fetch("/api/v2/simulator/reset", { method: "POST" });
   } catch (err) {}
@@ -1056,6 +1064,187 @@ function toggleDemoDropdown(e) {
   }
 }
 
+// ============================================================================
+// EXTENSION GUARD & IN-BROWSER SIMULATOR FOR JUDGES
+// ============================================================================
+
+let isExtensionSimActive = localStorage.getItem("fg_extension_sim") !== "false";
+
+function toggleExtensionDropdown(e) {
+  if (e) e.stopPropagation();
+  const dd = document.getElementById("extensionMenuDropdown");
+  if (dd) {
+    dd.style.display = (dd.style.display === "none" || !dd.style.display) ? "block" : "none";
+  }
+}
+
+function updateExtensionUIState() {
+  const dot = document.getElementById("extensionMenuDot");
+  const badge = document.getElementById("extensionDropdownBadge");
+  const toggleBtn = document.getElementById("btnToggleExtensionSim");
+  const text = document.getElementById("extensionMenuBtnText");
+
+  if (isExtensionSimActive) {
+    if (dot) { dot.className = "extension-status-dot active"; }
+    if (badge) {
+      badge.textContent = "GUARD ACTIVE";
+      badge.style.color = "#34d399";
+      badge.style.borderColor = "rgba(16,185,129,0.3)";
+      badge.style.background = "rgba(16,185,129,0.1)";
+    }
+    if (toggleBtn) {
+      toggleBtn.textContent = "🟢 ON (Simulated)";
+      toggleBtn.style.color = "#34d399";
+      toggleBtn.style.borderColor = "#10b981";
+      toggleBtn.style.background = "rgba(16, 185, 129, 0.25)";
+    }
+    if (text) text.textContent = "Extension Guard";
+  } else {
+    if (dot) { dot.className = "extension-status-dot inactive"; }
+    if (badge) {
+      badge.textContent = "SIMULATOR OFF";
+      badge.style.color = "#94a3b8";
+      badge.style.borderColor = "rgba(148,163,184,0.3)";
+      badge.style.background = "rgba(148,163,184,0.1)";
+    }
+    if (toggleBtn) {
+      toggleBtn.textContent = "⚪ OFF (Disabled)";
+      toggleBtn.style.color = "#94a3b8";
+      toggleBtn.style.borderColor = "rgba(148,163,184,0.3)";
+      toggleBtn.style.background = "rgba(255, 255, 255, 0.05)";
+    }
+    if (text) text.textContent = "Extension: OFF";
+  }
+}
+
+function toggleExtensionSimulationMode() {
+  isExtensionSimActive = !isExtensionSimActive;
+  localStorage.setItem("fg_extension_sim", isExtensionSimActive ? "true" : "false");
+  updateExtensionUIState();
+  if (isExtensionSimActive) {
+    showToast("🧩 Extension Simulator ON: in-page overlays will trigger on distractions");
+  } else {
+    showToast("⚪ Extension Simulator OFF: in-page overlays paused");
+    closeExtensionBanner();
+    closeExtensionMindMirror();
+  }
+}
+
+function showExtensionBanner(appLabel, goalText, customUrl, customLabel) {
+  const banner = document.getElementById("extInPageBanner");
+  if (!banner) return;
+  const goal = goalText || document.getElementById("goalTextInput")?.value || "Prepare for DSA exam";
+  const app = appLabel || "YouTube Shorts";
+  const destLabel = customLabel || "Striver DSA Trees Lecture";
+
+  const goalEl = document.getElementById("extBannerGoalText");
+  const reasonEl = document.getElementById("extBannerReasonText");
+  const btnEl = document.getElementById("extBannerTeleportBtnText");
+
+  if (goalEl) goalEl.textContent = goal;
+  if (reasonEl) reasonEl.textContent = `Observed ${app} diversion during active focus session.`;
+  if (btnEl) btnEl.textContent = `🚀 Launch ${destLabel}`;
+
+  banner.style.display = "flex";
+}
+
+function closeExtensionBanner() {
+  const banner = document.getElementById("extInPageBanner");
+  if (banner) banner.style.display = "none";
+}
+
+function showExtensionMindMirror(appLabel) {
+  const modal = document.getElementById("extMindMirrorModal");
+  if (!modal) return;
+  const headlineEl = document.getElementById("extMindMirrorHeadline");
+  const msgEl = document.getElementById("extMindMirrorMessage");
+
+  if (appLabel === "WhatsApp Web") {
+    if (headlineEl) headlineEl.textContent = `"Replying right now breaks your flow state."`;
+    if (msgEl) msgEl.textContent = `Context switching to messaging incurs an average 23-minute focus recovery time. These messages will still be here when you finish your study block.`;
+  } else {
+    if (headlineEl) headlineEl.textContent = `"Deep down you know 1 reel turns into 45 minutes of regret."`;
+    if (msgEl) msgEl.textContent = `You set an intention to focus on your declared goal. This algorithmic feed wasn't in your plan. Let's switch back right now.`;
+  }
+
+  modal.style.display = "flex";
+}
+
+function closeExtensionMindMirror() {
+  const modal = document.getElementById("extMindMirrorModal");
+  if (modal) modal.style.display = "none";
+}
+
+async function teleportToGoalFromExtension() {
+  closeExtensionBanner();
+  closeExtensionMindMirror();
+  closeFrozenScreenDemoModal();
+
+  try {
+    const res = await fetch("/api/v2/intervention/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intervention_id: "int_ext_teleport", action_id: "RETURN_TO_GOAL" })
+    });
+    const data = await res.json().catch(() => ({}));
+    const targetUrl = data.result?.target_url || document.getElementById("targetUrlInput")?.value || "https://www.youtube.com/results?search_query=dsa+trees+lecture+striver";
+    window.open(targetUrl, "_blank");
+    showToast("🚀 Teleported to Goal Workspace! Focus restored.");
+    triggerSimulatorStep(1);
+  } catch (e) {
+    const targetUrl = document.getElementById("targetUrlInput")?.value || "https://www.youtube.com/results?search_query=dsa+trees+lecture+striver";
+    window.open(targetUrl, "_blank");
+    triggerSimulatorStep(1);
+  }
+}
+
+function showExtensionOverlayPreview(tier) {
+  if (tier === 1) {
+    showExtensionBanner("YouTube Shorts");
+  } else if (tier === 2) {
+    showExtensionMindMirror("Instagram Reels");
+  } else if (tier === 3) {
+    openBreathReset();
+  } else if (tier === 4) {
+    openFrozenScreenDemoModal("Excessive distraction detected (Instagram Reels / YouTube Shorts / Chat). Tab locked for 1 minute.");
+  }
+}
+
+function openExtensionInstallModal() {
+  const modal = document.getElementById("extInstallModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeExtensionInstallModal() {
+  const modal = document.getElementById("extInstallModal");
+  if (modal) modal.style.display = "none";
+}
+
+function handleExtensionSimOverlaysForStep(stepNum) {
+  if (!isExtensionSimActive) return;
+  if (stepNum === 1 || stepNum === 2) {
+    closeExtensionBanner();
+    closeExtensionMindMirror();
+    closeFrozenScreenDemoModal();
+  } else if (stepNum === 3) {
+    closeExtensionMindMirror();
+    showExtensionBanner("YouTube Shorts");
+  } else if (stepNum === 4) {
+    closeExtensionBanner();
+    showExtensionMindMirror("Instagram Reels");
+  } else if (stepNum === 5) {
+    closeExtensionBanner();
+    showExtensionMindMirror("Reddit Feed");
+  } else if (stepNum === 6) {
+    closeExtensionBanner();
+    showExtensionMindMirror("WhatsApp Web");
+  } else if (stepNum === 7) {
+    closeExtensionBanner();
+    closeExtensionMindMirror();
+    openFrozenScreenDemoModal("Excessive distraction detected (Instagram Reels / YouTube Shorts / Chat). Active 1-minute freeze lockout.");
+  }
+}
+
 // Close dropdown on click outside
 document.addEventListener("click", (e) => {
   const wrapper = document.getElementById("userPresenceWrapper");
@@ -1068,6 +1257,12 @@ document.addEventListener("click", (e) => {
   const demoDd = document.getElementById("demoMenuDropdown");
   if (demoDd && demoDd.style.display === "block" && demoBtn && !demoBtn.contains(e.target) && !demoDd.contains(e.target)) {
     demoDd.style.display = "none";
+  }
+
+  const extBtn = document.getElementById("btnExtensionMenu");
+  const extDd = document.getElementById("extensionMenuDropdown");
+  if (extDd && extDd.style.display === "block" && extBtn && !extBtn.contains(e.target) && !extDd.contains(e.target)) {
+    extDd.style.display = "none";
   }
 });
 
@@ -1955,6 +2150,7 @@ function jsonString(obj) {
 
 // Initialize on DOM load
 document.addEventListener("DOMContentLoaded", () => {
+  updateExtensionUIState();
   pollLiveTelemetry();
   pollTimer = setInterval(pollLiveTelemetry, 1500);
 });

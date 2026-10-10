@@ -446,6 +446,44 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "users": users_list,
                 "profiles": profiles
             })
+        # Extension Zip Download Endpoint (For Judges & Evaluators)
+        if path in ("/api/extension/download", "/api/v2/extension/download"):
+            import zipfile
+            ext_dir = os.path.join(PROJECT_DIR, "extension")
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                if os.path.exists(ext_dir):
+                    for root, _, files in os.walk(ext_dir):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            rel_path = os.path.relpath(full_path, ext_dir)
+                            zf.write(full_path, rel_path)
+            buf.seek(0)
+            zip_bytes = buf.getvalue()
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/zip')
+            self.send_header('Content-Disposition', 'attachment; filename="focusguard-extension.zip"')
+            self.send_header('Content-Length', str(len(zip_bytes)))
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(zip_bytes)
+            return
+
+        # Extension Status Endpoint
+        if path in ("/api/extension/status", "/api/v2/extension/status"):
+            return self._send_json(200, {
+                "active": True,
+                "simulated": True,
+                "version": "2.0.0",
+                "manifest_version": 3,
+                "features": [
+                    "in_page_banner",
+                    "mind_mirror_modal",
+                    "guided_breath_reset",
+                    "tab_freeze_penalty"
+                ]
+            })
 
         # 6. Legacy compatibility: Consolidated System Status
         if path == "/api/status":

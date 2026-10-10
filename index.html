@@ -104,6 +104,9 @@
             <button class="btn-action primary" style="font-size: 0.75rem; padding: 0.45rem; justify-content: center;" onclick="openFaceScannerModal()">
               📷 Verify Face with Camera
             </button>
+            <button class="btn-chip" style="font-size: 0.72rem; padding: 0.35rem; justify-content: center; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #34d399;" onclick="openFaceScannerModal(true)">
+              ✨ Enroll My Face as Owner
+            </button>
             <div style="display: flex; gap: 0.3rem;">
               <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem;" onclick="simulatePresence('USER_WATCHING')">👤 User</button>
               <button class="btn-chip" style="flex:1; font-size:0.7rem; padding:0.25rem 0.4rem;" onclick="simulatePresence('GUEST_WATCHING')">👥 Guest</button>
@@ -498,6 +501,7 @@
 
       <div class="webcam-viewport" id="webcamViewport">
         <video id="scannerVideo" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; display:none;"></video>
+        <canvas id="scannerCanvas" style="display:none;"></canvas>
         <div class="scanning-reticle" id="scannerReticle">
           <div style="font-size:10px; color:#38bdf8; font-weight:700; text-transform:uppercase; letter-spacing:1px; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:4px;">
             Scanning Face
@@ -523,8 +527,11 @@
         <button id="btnStartWebcam" class="btn-action primary" style="justify-content:center; padding:10px;" onclick="startWebcamCapture()">
           <span>🎥 Turn On Webcam Face Scanner</span>
         </button>
+        <button id="btnEnrollFace" class="btn-action" style="background: linear-gradient(135deg, #10b981, #059669); color: white; justify-content:center; padding:10px; font-weight:700;" onclick="enrollCurrentUserFace()">
+          <span>✨ Enroll My Face as Owner</span>
+        </button>
         <div style="display:flex; gap:6px;">
-          <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('USER_WATCHING'); setScannerVerdict('USER_WATCHING');">👤 User (Eshan)</button>
+          <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('USER_WATCHING'); setScannerVerdict('USER_WATCHING');">👤 User (Owner)</button>
           <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('GUEST_WATCHING'); setScannerVerdict('GUEST_WATCHING');">👥 Guest</button>
           <button class="btn-chip" style="flex:1; font-size:0.75rem;" onclick="simulatePresence('AWAY'); setScannerVerdict('AWAY');">🚶 Away</button>
         </div>

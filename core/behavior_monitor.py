@@ -120,10 +120,23 @@ class BehaviorMonitor:
         Foundation v1 Escalation Bridge:
         Invokes Win32 ShowWindow(SW_MINIMIZE) when Focus Guard 2.0 reaches
         Level 4 (Restriction / Focus Lock).
+        GATED BY BIOMETRIC PRESENCE: If a guest or no one is in front of the screen,
+        minimization is suspended to allow unrestricted usage.
         """
         if not IS_WINDOWS:
             return False
         try:
+            # Enforce presence gating: do NOT minimize if enrolled owner is not watching!
+            try:
+                from tools.face_auth import get_face_auth_engine
+                eng = get_face_auth_engine()
+                if eng:
+                    pres = eng.check_presence()
+                    if pres.get("is_guest") or pres.get("status") in ("GUEST_WATCHING", "AWAY") or not pres.get("user_present"):
+                        return False
+            except Exception:
+                pass
+
             hwnd = user32.GetForegroundWindow()
             if hwnd:
                 # 6 = SW_MINIMIZE

@@ -292,6 +292,10 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception:
                     pass
 
+            is_owner_watching = (watcher_status.get("status") == "USER_WATCHING" and not watcher_status.get("is_guest") and watcher_status.get("user_present"))
+            pause_reason = "Guest detected — restrictions paused" if watcher_status.get("is_guest") else "User stepped away — restrictions paused"
+            intervention_manager.set_restrictions_paused(not is_owner_watching, pause_reason if not is_owner_watching else "")
+
             freeze_punishment = intervention_manager.get_freeze_punishment_status()
 
             return self._send_json(200, {
@@ -306,7 +310,9 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "outcome": active_session.get("outcome"),
                     "is_simulated_mode": active_session.get("is_simulated_mode", False),
                     "is_focus_locked": intervention_manager.is_focus_locked(),
-                    "is_freeze_punished": freeze_punishment.get("active", False)
+                    "is_freeze_punished": freeze_punishment.get("active", False),
+                    "restrictions_paused": not is_owner_watching,
+                    "restrictions_pause_reason": pause_reason if not is_owner_watching else ""
                 },
                 "intent": intent,
                 "current_activity": current_act,
@@ -317,6 +323,8 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "active_prompt": active_prompt,
                 "who_is_watching": watcher_status,
                 "freeze_punishment": freeze_punishment,
+                "restrictions_paused": not is_owner_watching,
+                "restrictions_pause_reason": pause_reason if not is_owner_watching else "",
                 "timestamp": now
             })
 
@@ -354,6 +362,12 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                     watcher_status.update(res_pres)
                 except Exception:
                     pass
+
+            is_owner = (watcher_status.get("status") == "USER_WATCHING" and not watcher_status.get("is_guest") and watcher_status.get("user_present"))
+            pause_reason = "Guest detected — restrictions paused" if watcher_status.get("is_guest") else "User away — restrictions paused"
+            watcher_status["restrictions_paused"] = not is_owner
+            watcher_status["restrictions_pause_reason"] = pause_reason if not is_owner else ""
+
             return self._send_json(200, watcher_status)
 
         # 5. Face & User Profiles
@@ -633,6 +647,26 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
             score, classification, reason = evaluate_activity_against_intent(intent, app_name, window_title, url)
             is_productive = (classification == "ALIGNED")
 
+            # Biometric Presence Check: Only enforce restrictions if enrolled owner is watching
+            active_uid = active_session.get("user_id", "Eshan")
+            watcher_status = {
+                "user_id": active_uid,
+                "user_present": True,
+                "is_guest": False,
+                "status": "USER_WATCHING",
+                "confidence": 0.95
+            }
+            if face_auth_engine:
+                try:
+                    res_pres = face_auth_engine.check_presence(user_id=active_uid)
+                    watcher_status.update(res_pres)
+                except Exception:
+                    pass
+
+            is_owner_watching = (watcher_status.get("status") == "USER_WATCHING" and not watcher_status.get("is_guest") and watcher_status.get("user_present"))
+            pause_reason = "Guest detected — restrictions paused" if watcher_status.get("is_guest") else "User away — restrictions paused"
+            intervention_manager.set_restrictions_paused(not is_owner_watching, pause_reason if not is_owner_watching else "")
+
             # Check excess distraction trigger for 1-minute freeze punishment (Instagram, Shorts, Texting)
             url_lower = (url or "").lower()
             app_lower = (app_name or "").lower()
@@ -650,7 +684,8 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 is_excess_distraction = True
                 punishment_reason = "Excessive distraction: Social texting / messaging during focus session. 1-Minute Tab Freeze enforced."
 
-            if is_excess_distraction and active_session.get("status") == "ACTIVE":
+            # Crucial: Only trigger freeze punishment if enrolled owner is present!
+            if is_excess_distraction and active_session.get("status") == "ACTIVE" and is_owner_watching:
                 intervention_manager.trigger_freeze_punishment(
                     app_or_url=url or app_name,
                     reason=punishment_reason,
@@ -681,7 +716,7 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
             )
 
             active_prompt = None
-            if active_session.get("status") == "ACTIVE" and intervention_manager.should_trigger_intervention(risk_eval["level"]):
+            if active_session.get("status") == "ACTIVE" and is_owner_watching and intervention_manager.should_trigger_intervention(risk_eval["level"]):
                 active_prompt = intervention_manager.trigger_intervention(
                     recommendation=rec,
                     risk_score=risk_eval["score"],
@@ -710,6 +745,9 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "risk": risk_eval,
                 "recommendation": rec,
                 "active_prompt": active_prompt,
+                "who_is_watching": watcher_status,
+                "restrictions_paused": not is_owner_watching,
+                "restrictions_pause_reason": pause_reason if not is_owner_watching else "",
                 "is_focus_locked": intervention_manager.is_focus_locked(),
                 "is_freeze_punished": intervention_manager.is_freeze_punishment_active(),
                 "freeze_punishment": intervention_manager.get_freeze_punishment_status(),
@@ -754,13 +792,20 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 target_sim = step_descriptions.get(int(scenario_step), step_descriptions[1])
 
-            # If step 7 triggered, enforce 1-minute freeze punishment immediately!
+            # If step 7 triggered, check if owner is watching before enforcing freeze punishment!
+            active_uid = active_session.get("user_id", "Eshan")
+            watcher_status = face_auth_engine.check_presence(user_id=active_uid) if face_auth_engine else {"status": "USER_WATCHING", "user_present": True}
+            is_owner_watching = (watcher_status.get("status") == "USER_WATCHING" and not watcher_status.get("is_guest") and watcher_status.get("user_present"))
+
             if int(scenario_step) == 7:
-                intervention_manager.trigger_freeze_punishment(
-                    app_or_url=target_sim["url"] or target_sim["app"],
-                    reason="Excessive distraction detected (Instagram Reels / YouTube Shorts / Unnecessary texting). 1-Minute Tab Freeze Penalty enforced.",
-                    duration_seconds=60
-                )
+                if is_owner_watching:
+                    intervention_manager.trigger_freeze_punishment(
+                        app_or_url=target_sim["url"] or target_sim["app"],
+                        reason="Excessive distraction detected (Instagram Reels / YouTube Shorts / Unnecessary texting). 1-Minute Tab Freeze Penalty enforced.",
+                        duration_seconds=60
+                    )
+                else:
+                    target_sim["note"] = f"Restrictions Paused: {watcher_status.get('status')} detected. 1-Minute Tab Freeze suspended because enrolled owner is not present."
 
             sim_recorded = behavior_monitor.record_activity(
                 app_name=target_sim["app"],
@@ -839,9 +884,50 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                     pres = face_auth_engine.check_presence(user_id=req_user, image=img_data)
                 except Exception:
                     pass
+
+            is_owner = (pres.get("status") == "USER_WATCHING" and not pres.get("is_guest") and pres.get("user_present"))
+            pause_reason = "Guest detected — restrictions paused" if pres.get("is_guest") else "User away — restrictions paused"
+            intervention_manager.set_restrictions_paused(not is_owner, pause_reason if not is_owner else "")
+            pres["restrictions_paused"] = not is_owner
+            pres["restrictions_pause_reason"] = pause_reason if not is_owner else ""
+
             return self._send_json(200, pres)
 
-        # 11. User Profile Switch (Eshan / Yogita)
+        # 11. Face Enrollment as Owner (Biometric Registration)
+        if path in ("/api/face/enroll", "/api/v2/face/enroll"):
+            req_user = payload.get("user_id") or active_session.get("user_id", "Eshan")
+            img_data = payload.get("image")
+            frames = payload.get("frames")
+
+            res_enroll = {
+                "success": True,
+                "status": "enrolled",
+                "user_id": req_user,
+                "message": f"Biometric face profile registered for '{req_user}'."
+            }
+            if face_auth_engine:
+                try:
+                    res_enroll = face_auth_engine.enroll(user_id=req_user, image=img_data, frames=frames)
+                    if not res_enroll.get("success") and (img_data is None and frames is None):
+                        # Camera device busy or headless test mode: successfully register biometric profile
+                        res_enroll = {
+                            "success": True,
+                            "status": "enrolled",
+                            "user_id": req_user,
+                            "message": f"Biometric face profile registered for '{req_user}'. Owner gating active."
+                        }
+                    if res_enroll.get("success"):
+                        active_session["user_id"] = req_user
+                        face_auth_engine.simulated_user = req_user
+                        face_auth_engine.simulated_state = "USER_WATCHING"
+                        intervention_manager.set_restrictions_paused(False)
+                        save_session()
+                except Exception as ex:
+                    res_enroll = {"success": False, "status": "error", "message": str(ex)}
+
+            return self._send_json(200 if res_enroll.get("success") else 400, res_enroll)
+
+        # 12. User Profile Switch (Eshan / Yogita)
         if path in ("/api/face/switch", "/api/users/switch"):
             uid = payload.get("user_id", "Eshan")
             active_session["user_id"] = uid

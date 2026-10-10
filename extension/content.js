@@ -1157,6 +1157,17 @@
         currentSession.risk = data.risk || { score: 0, level: 0 };
         currentSession.drift = data.drift || { drift_state: "NOMINAL", distraction_streak_seconds: 0 };
 
+        // CRUCIAL BIOMETRIC PRESENCE GATING:
+        // If enrolled owner is NOT in front of screen (Guest or Away), restrictions MUST NOT work!
+        const isGuest = data.who_is_watching?.is_guest === true || data.who_is_watching?.status === "GUEST_WATCHING";
+        const isAway = data.who_is_watching?.status === "AWAY" || data.who_is_watching?.user_present === false;
+        if (data.restrictions_paused === true || isGuest || isAway) {
+          isPageProductive = true;
+          streakSeconds = 0;
+          dismissAllDomHud();
+          return;
+        }
+
         // Check if page is marked productive by server intent engine
         if (data.relevant === true || data.classification === "PRODUCTIVE" || data.classification === "ALIGNED") {
           isPageProductive = true;

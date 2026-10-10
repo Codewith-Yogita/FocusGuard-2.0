@@ -26,6 +26,20 @@ class AdaptiveInterventionManager:
         self.freeze_punishment_until: float = 0
         self.freeze_punishment_reason: str = ""
         self.freeze_punishment_app: str = ""
+        self.restrictions_paused: bool = False
+        self.restrictions_pause_reason: str = ""
+
+    def set_restrictions_paused(self, paused: bool, reason: str = ""):
+        """Sets whether restrictions are paused (e.g. when guest is watching or user is away)."""
+        self.restrictions_paused = paused
+        self.restrictions_pause_reason = reason
+        if paused:
+            self.clear_freeze_punishment()
+            self.current_active_intervention = None
+
+    def are_restrictions_paused(self) -> bool:
+        """Returns True if restrictions are currently suspended for guest or away mode."""
+        return self.restrictions_paused
 
     def reset(self):
         """Resets intervention counters for a fresh focus session."""
@@ -39,9 +53,14 @@ class AdaptiveInterventionManager:
         self.freeze_punishment_until = 0
         self.freeze_punishment_reason = ""
         self.freeze_punishment_app = ""
+        self.restrictions_paused = False
+        self.restrictions_pause_reason = ""
 
     def should_trigger_intervention(self, risk_level: int) -> bool:
         """Determines if a new intervention prompt should be displayed to the user."""
+        if self.restrictions_paused:
+            return False
+
         now = time.time()
 
         # If user is in an active snooze window
@@ -199,6 +218,8 @@ class AdaptiveInterventionManager:
 
     def is_focus_locked(self) -> bool:
         """Returns True if the system is currently under an active Level 4 Focus Lock."""
+        if self.restrictions_paused:
+            return False
         return time.time() < self.focus_lock_until
 
     def trigger_freeze_punishment(
@@ -208,6 +229,16 @@ class AdaptiveInterventionManager:
         duration_seconds: int = 60
     ) -> Dict[str, Any]:
         """Enforces a strict 1-minute frozen lockout penalty for excess distraction."""
+        if self.restrictions_paused:
+            return {
+                "active": False,
+                "paused": True,
+                "remaining_seconds": 0,
+                "total_seconds": 60,
+                "reason": self.restrictions_pause_reason or "Restrictions paused: Guest or no user in front of screen.",
+                "target_app": ""
+            }
+
         now = time.time()
         self.freeze_punishment_until = now + duration_seconds
         self.freeze_punishment_reason = reason
@@ -224,15 +255,27 @@ class AdaptiveInterventionManager:
 
     def is_freeze_punishment_active(self) -> bool:
         """Returns True if the 1-minute frozen lockout punishment is currently running."""
+        if self.restrictions_paused:
+            return False
         return time.time() < self.freeze_punishment_until
 
     def get_freeze_punishment_status(self) -> Dict[str, Any]:
         """Returns status and countdown of active freeze punishment."""
+        if self.restrictions_paused:
+            return {
+                "active": False,
+                "paused": True,
+                "remaining_seconds": 0,
+                "total_seconds": 60,
+                "reason": self.restrictions_pause_reason or "Restrictions paused for Guest / Away mode.",
+                "target_app": ""
+            }
         now = time.time()
         is_active = now < self.freeze_punishment_until
         remaining = max(0, int(self.freeze_punishment_until - now)) if is_active else 0
         return {
             "active": is_active,
+            "paused": False,
             "remaining_seconds": remaining,
             "total_seconds": 60,
             "reason": self.freeze_punishment_reason if is_active else "",

@@ -1080,6 +1080,13 @@ async function switchUserProfile(userId) {
 
 async function simulatePresence(state) {
   currentPresenceState = state;
+  if (state === "GUEST_WATCHING" || state === "AWAY") {
+    clientFreezePunishment.active = false;
+    clientFreezePunishment.is_active = false;
+    clearInterval(freezeCountdownTimer);
+    const fBanner = document.getElementById("freezePunishmentBanner");
+    if (fBanner) fBanner.style.display = "none";
+  }
   try {
     await fetch("/api/face/presence", {
       method: "POST",
@@ -1136,14 +1143,22 @@ function updateWhoIsWatchingUI(watcher, activeUserId) {
   }
 
   const isGuest = watcher?.is_guest || (watcher?.status === "GUEST_WATCHING");
-  const isAway = (watcher?.status === "AWAY" || watcher?.reason === "no_face");
+  const isAway = (watcher?.status === "AWAY" || watcher?.reason === "no_face" || watcher?.user_present === false);
+
+  if (isGuest) {
+    currentPresenceState = "GUEST_WATCHING";
+  } else if (isAway) {
+    currentPresenceState = "AWAY";
+  } else {
+    currentPresenceState = "USER_WATCHING";
+  }
 
   if (presenceStatusEl) {
     if (isGuest) {
       presenceStatusEl.textContent = "👥 Guest Detected (Paused)";
       presenceStatusEl.style.color = "#f59e0b";
     } else if (isAway) {
-      presenceStatusEl.textContent = "⚪ Away (No Face)";
+      presenceStatusEl.textContent = "⚪ Away (Restrictions Paused)";
       presenceStatusEl.style.color = "#94a3b8";
     } else {
       presenceStatusEl.textContent = `🟢 Watching (${uid})`;
@@ -1152,13 +1167,33 @@ function updateWhoIsWatchingUI(watcher, activeUserId) {
   }
 
   if (presenceBtnLabel) {
-    if (isGuest) presenceBtnLabel.textContent = "Guest Watching";
-    else if (isAway) presenceBtnLabel.textContent = "User Away";
-    else presenceBtnLabel.textContent = `${uid} Watching`;
+    if (isGuest) presenceBtnLabel.textContent = "Guest Watching (Paused)";
+    else if (isAway) presenceBtnLabel.textContent = "User Away (Paused)";
+    else presenceBtnLabel.textContent = `${uid} Watching (Active)`;
   }
 
   if (guestBanner) {
-    guestBanner.style.display = isGuest ? "flex" : "none";
+    if (isGuest) {
+      guestBanner.style.display = "flex";
+      const titleEl = document.getElementById("guestAlertTitle");
+      const descEl = document.getElementById("guestAlertDesc");
+      if (titleEl) titleEl.textContent = "Guest Detected at Screen:";
+      if (descEl) descEl.textContent = "All distraction restrictions paused — non-enrolled person detected. Browsing and apps are unrestricted.";
+    } else if (isAway) {
+      guestBanner.style.display = "flex";
+      const titleEl = document.getElementById("guestAlertTitle");
+      const descEl = document.getElementById("guestAlertDesc");
+      if (titleEl) titleEl.textContent = "User Stepped Away:";
+      if (descEl) descEl.textContent = "No face in front of screen. Focus monitoring, penalties, and lockouts are paused.";
+    } else {
+      guestBanner.style.display = "none";
+    }
+  }
+
+  // If enrolled owner is NOT in front of screen, hide freeze punishment banner immediately
+  if (isGuest || isAway) {
+    const fBanner = document.getElementById("freezePunishmentBanner");
+    if (fBanner) fBanner.style.display = "none";
   }
 }
 
@@ -1173,7 +1208,9 @@ function updateFreezePunishmentUI(punishment) {
   const modalCountdown = document.getElementById("frozenModalCountdown");
   const modalReason = document.getElementById("frozenModalReason");
 
-  if (!punishment || !punishment.active) {
+  const isNotOwner = (currentPresenceState === "GUEST_WATCHING" || currentPresenceState === "AWAY");
+
+  if (!punishment || !punishment.active || punishment.paused || isNotOwner) {
     if (banner) banner.style.display = "none";
     return;
   }
@@ -1226,20 +1263,69 @@ async function teleportToGoalFromFreeze() {
 }
 
 // ============================================================================
-// FACE SCANNER WEBCAM MODAL
+// BIOMETRIC FACE AUTHENTICATION & WEBCAM PIPELINE
 // ============================================================================
 
-function openFaceScannerModal() {
+let webcamStream = null;
+let webcamScanInterval = null;
+
+function captureWebcamFrame() {
+  const videoEl = document.getElementById("scannerVideo");
+  const canvasEl = document.getElementById("scannerCanvas");
+  if (!videoEl || !canvasEl || !videoEl.videoWidth || !videoEl.videoHeight) return null;
+  canvasEl.width = videoEl.videoWidth;
+  canvasEl.height = videoEl.videoHeight;
+  const ctx = canvasEl.getContext("2d");
+  ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+  return canvasEl.toDataURL("image/jpeg", 0.7);
+}
+
+async function scanLiveWebcamFrame() {
+  const imgData = captureWebcamFrame();
+  if (!imgData) return;
+  try {
+    const res = await fetch("/api/face/presence", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image: imgData,
+        user_id: currentActiveUser
+      })
+    });
+    if (res.ok) {
+      const pres = await res.json();
+      const status = pres.status || (pres.user_present ? "USER_WATCHING" : (pres.is_guest ? "GUEST_WATCHING" : "AWAY"));
+      currentPresenceState = status;
+      setScannerVerdict(status, pres);
+      updateWhoIsWatchingUI(pres, pres.user_id || currentActiveUser);
+    }
+  } catch (err) {
+    console.warn("Live face scan note:", err);
+  }
+}
+
+function openFaceScannerModal(triggerEnroll = false) {
   const dd = document.getElementById("userProfileDropdown");
   if (dd) dd.style.display = "none";
   const modal = document.getElementById("faceScannerModal");
   if (modal) modal.style.display = "flex";
   setScannerVerdict(currentPresenceState);
+
+  if (triggerEnroll) {
+    startWebcamCapture().then(() => {
+      const subEl = document.getElementById("scannerVerdictSubtext");
+      if (subEl) subEl.textContent = "Camera active. Look straight at webcam and click 'Enroll My Face as Owner'.";
+    });
+  }
 }
 
 function closeFaceScannerModal() {
   const modal = document.getElementById("faceScannerModal");
   if (modal) modal.style.display = "none";
+  if (webcamScanInterval) {
+    clearInterval(webcamScanInterval);
+    webcamScanInterval = null;
+  }
   if (webcamStream) {
     try {
       webcamStream.getTracks().forEach(track => track.stop());
@@ -1250,6 +1336,8 @@ function closeFaceScannerModal() {
   if (videoEl) videoEl.style.display = "none";
   const feedSim = document.getElementById("scannerSimulationFeed");
   if (feedSim) feedSim.style.display = "flex";
+  const btn = document.getElementById("btnStartWebcam");
+  if (btn) btn.innerHTML = "<span>🎥 Turn On Webcam Face Scanner</span>";
 }
 
 async function startWebcamCapture() {
@@ -1265,35 +1353,90 @@ async function startWebcamCapture() {
         videoEl.style.display = "block";
         if (feedSim) feedSim.style.display = "none";
         if (btn) btn.innerHTML = "<span>✅ Live Camera Active & Scanning Face</span>";
-        setScannerVerdict("USER_WATCHING");
       }
+
+      if (webcamScanInterval) clearInterval(webcamScanInterval);
+      webcamScanInterval = setInterval(scanLiveWebcamFrame, 1500);
+      setTimeout(scanLiveWebcamFrame, 700);
     } else {
-      setScannerVerdict("USER_WATCHING");
+      setScannerVerdict(currentPresenceState);
     }
   } catch (err) {
     console.warn("Webcam access note:", err);
     if (btn) btn.innerHTML = "<span>📷 Using Biometric Simulator (Camera Busy)</span>";
-    setScannerVerdict("USER_WATCHING");
+    setScannerVerdict(currentPresenceState);
   }
 }
 
-function setScannerVerdict(state) {
+async function enrollCurrentUserFace() {
+  const btn = document.getElementById("btnEnrollFace");
+  const textEl = document.getElementById("scannerVerdictText");
+  const subEl = document.getElementById("scannerVerdictSubtext");
+
+  if (!webcamStream) {
+    await startWebcamCapture();
+    await new Promise(r => setTimeout(r, 900));
+  }
+
+  const imgData = captureWebcamFrame();
+  if (btn) btn.innerHTML = "<span>⏳ Capturing Face & Generating Biometric Embedding...</span>";
+
+  try {
+    const res = await fetch("/api/face/enroll", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: currentActiveUser,
+        image: imgData
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (btn) btn.innerHTML = "<span>✅ Enrolled Successfully!</span>";
+      if (textEl) {
+        textEl.textContent = `✨ Enrolled Owner: ${currentActiveUser} (Active)`;
+        textEl.style.color = "#10b981";
+      }
+      if (subEl) {
+        subEl.textContent = `Your biometric face profile is registered & DPAPI-protected. Restrictions will now ONLY work when you (${currentActiveUser}) are detected at the screen.`;
+      }
+      currentPresenceState = "USER_WATCHING";
+      setTimeout(() => {
+        if (btn) btn.innerHTML = "<span>✨ Enroll My Face as Owner</span>";
+      }, 4000);
+      pollLiveTelemetry();
+    } else {
+      if (btn) btn.innerHTML = "<span>❌ Enrollment Failed</span>";
+      if (subEl) subEl.textContent = data.message || "Could not detect clear face. Center your face in lighting.";
+      setTimeout(() => {
+        if (btn) btn.innerHTML = "<span>✨ Enroll My Face as Owner</span>";
+      }, 3000);
+    }
+  } catch (err) {
+    console.error("Enroll face error:", err);
+    if (btn) btn.innerHTML = "<span>✨ Enroll My Face as Owner</span>";
+  }
+}
+
+function setScannerVerdict(state, pres = null) {
   const textEl = document.getElementById("scannerVerdictText");
   const subEl = document.getElementById("scannerVerdictSubtext");
   if (!textEl) return;
 
+  const conf = pres?.confidence ? Math.round(pres.confidence * 100) : 95;
+
   if (state === "GUEST_WATCHING") {
     textEl.textContent = "👥 Unrecognized Face: Guest Detected";
     textEl.style.color = "#f59e0b";
-    if (subEl) subEl.textContent = "Face does not match enrolled owner. Distraction restrictions automatically paused.";
+    if (subEl) subEl.textContent = "Face does not match enrolled owner. Distraction restrictions & tab freezes automatically PAUSED.";
   } else if (state === "AWAY") {
     textEl.textContent = "🚶 No Face Detected: User Stepped Away";
     textEl.style.color = "#94a3b8";
-    if (subEl) subEl.textContent = "No presence detected in front of webcam.";
+    if (subEl) subEl.textContent = "No face in front of webcam. Restrictions paused while screen is unattended.";
   } else {
-    textEl.textContent = `👤 User Verified: ${currentActiveUser} (95% Match)`;
+    textEl.textContent = `👤 Enrolled Owner: ${currentActiveUser} (${conf}% Match)`;
     textEl.style.color = "#10b981";
-    if (subEl) subEl.textContent = `Enrolled owner '${currentActiveUser}' confirmed. Focus policies and 1-minute freeze penalty active.`;
+    if (subEl) subEl.textContent = `Enrolled owner '${currentActiveUser}' confirmed. Focus policies and 1-minute freeze penalty ACTIVE.`;
   }
 }
 

@@ -480,6 +480,9 @@ class FaceAuthEngine:
             templates[user_id] = template_data
             self._save_templates(templates)
 
+            self.simulated_state = "USER_WATCHING"
+            self.simulated_user = user_id
+
             print(f"[FaceAuth] Successfully enrolled user '{user_id}' ({len(features)} frames).")
 
             return {
@@ -488,8 +491,19 @@ class FaceAuthEngine:
                 "code": 200,
                 "template_id": template_id,
                 "user_id": user_id,
-                "samples_averaged": len(features)
+                "samples_averaged": len(features),
+                "message": f"Biometric face successfully enrolled for '{user_id}'. Enrolled owner presence gating is now active."
             }
+
+    def is_real_enrolled(self, user_id=None) -> bool:
+        """Returns True if user has an actual captured 128-d face embedding (not placeholder zeros)."""
+        target = user_id or self.simulated_user or "Eshan"
+        templates = self._load_templates()
+        t_data = templates.get(target)
+        if not t_data:
+            return False
+        vec = t_data.get("feature_vector", [])
+        return any(abs(v) > 1e-4 for v in vec)
 
     def authenticate(self, user_id="any", image=None, timeout_ms=4000) -> dict:
         """
@@ -611,10 +625,118 @@ class FaceAuthEngine:
         Returns:
           - user_present=True, is_guest=False (Enrolled user is actively watching -> Focus rules active)
           - user_present=False, is_guest=True (Guest watching screen -> Focus rules paused, flawless apps)
-          - user_present=False, is_guest=False (No face in front of screen)
+          - user_present=False, is_guest=False (No face in front of screen -> Restrictions paused)
         """
         with self.lock:
-            # Handle explicit simulation state for demo and evaluations
+            # 1. If camera frame image is provided (live webcam feed), evaluate actual frame!
+            if image:
+                frame = decode_base64_image(image)
+                if frame is None:
+                    return {
+                        "present": False,
+                        "user_present": False,
+                        "is_guest": False,
+                        "user_id": None,
+                        "confidence": 0.0,
+                        "status": "AWAY",
+                        "reason": "invalid_frame",
+                        "message": "Could not decode camera image frame."
+                    }
+
+                if not HAS_OPENCV or not self.initialized:
+                    is_owner = (self.simulated_state == "USER_WATCHING")
+                    is_gst = (self.simulated_state == "GUEST_WATCHING")
+                    return {
+                        "present": not (self.simulated_state == "AWAY"),
+                        "user_present": is_owner,
+                        "is_guest": is_gst,
+                        "status": self.simulated_state,
+                        "confidence": 0.95 if is_owner else 0.40,
+                        "message": f"Biometric stream received ({self.simulated_state})."
+                    }
+
+                best_face, aligned, multiple = self.detect_and_align(frame)
+                if best_face is None or aligned is None:
+                    # Camera active, but NO face found -> User is Away!
+                    self.simulated_state = "AWAY"
+                    return {
+                        "present": False,
+                        "user_present": False,
+                        "is_guest": False,
+                        "user_id": None,
+                        "confidence": 0.0,
+                        "status": "AWAY",
+                        "reason": "no_face",
+                        "message": "No face detected in camera frame. User stepped away. Distraction restrictions paused."
+                    }
+
+                feat = self.extract_feature(aligned)
+                if feat is None:
+                    self.simulated_state = "AWAY"
+                    return {
+                        "present": False,
+                        "user_present": False,
+                        "is_guest": False,
+                        "user_id": None,
+                        "confidence": 0.0,
+                        "status": "AWAY",
+                        "reason": "no_face",
+                        "message": "Unable to extract facial landmarks. Restrictions paused."
+                    }
+
+                templates = self._load_templates()
+                target_user = user_id or self.simulated_user or "Eshan"
+                target_template = templates.get(target_user)
+
+                has_real_enrolled = (
+                    target_template is not None
+                    and "feature_vector" in target_template
+                    and any(abs(v) > 1e-4 for v in target_template.get("feature_vector", []))
+                )
+
+                if not has_real_enrolled:
+                    # Template has not been captured yet; accept presence but flag need to enroll
+                    self.simulated_state = "USER_WATCHING"
+                    return {
+                        "present": True,
+                        "user_present": True,
+                        "is_guest": False,
+                        "user_id": target_user,
+                        "confidence": 0.95,
+                        "status": "USER_WATCHING",
+                        "needs_enrollment": True,
+                        "message": f"Owner '{target_user}' detected in front of screen. Restrictions active."
+                    }
+
+                stored_feat = np.array(target_template["feature_vector"], dtype=np.float32).reshape(1, -1)
+                score = float(self.recognizer.match(stored_feat, feat, cv2.FaceRecognizerSF_FR_COSINE))
+                norm_conf = max(0.0, min(1.0, score))
+
+                if score >= self.threshold:
+                    self.simulated_state = "USER_WATCHING"
+                    return {
+                        "present": True,
+                        "user_present": True,
+                        "is_guest": False,
+                        "user_id": target_user,
+                        "confidence": round(norm_conf, 3),
+                        "status": "USER_WATCHING",
+                        "message": f"Enrolled owner '{target_user}' verified watching screen ({int(norm_conf * 100)}% match). Restrictions active."
+                    }
+                else:
+                    self.simulated_state = "GUEST_WATCHING"
+                    return {
+                        "present": True,
+                        "user_present": False,
+                        "is_guest": True,
+                        "user_id": "guest",
+                        "confidence": round(norm_conf, 3),
+                        "status": "GUEST_WATCHING",
+                        "reason": "unrecognized_face",
+                        "message": f"Guest detected: face does not match enrolled owner '{target_user}'. Distraction restrictions paused."
+                    }
+
+            # 2. When no image is passed, handle simulated or manual state toggles
             active_u = user_id or self.simulated_user or "Eshan"
             if self.simulated_state == "USER_WATCHING":
                 return {
@@ -622,9 +744,9 @@ class FaceAuthEngine:
                     "user_present": True,
                     "is_guest": False,
                     "user_id": active_u,
-                    "confidence": 0.94,
+                    "confidence": 0.95,
                     "status": "USER_WATCHING",
-                    "message": f"Enrolled user '{active_u}' verified watching screen. Focus policies active."
+                    "message": f"Enrolled owner '{active_u}' verified watching screen. Focus policies active."
                 }
             elif self.simulated_state == "GUEST_WATCHING":
                 return {
@@ -646,18 +768,7 @@ class FaceAuthEngine:
                     "confidence": 0.0,
                     "status": "AWAY",
                     "reason": "no_face",
-                    "message": "No face detected in front of screen. User stepped away."
-                }
-
-            templates = self._load_templates()
-            if not templates:
-                return {
-                    "present": False,
-                    "user_present": False,
-                    "is_guest": False,
-                    "user_id": None,
-                    "confidence": 0.0,
-                    "reason": "not_enrolled"
+                    "message": "No face detected in front of screen. User stepped away. Restrictions paused."
                 }
 
             if not HAS_OPENCV:

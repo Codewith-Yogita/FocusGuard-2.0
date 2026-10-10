@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "cleanUrls": true,
   "buildCommand": "echo 'Focus Guard 2.0 Web Ready'",
   "outputDirectory": "."

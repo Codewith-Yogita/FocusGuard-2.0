@@ -3,9 +3,9 @@
   "version": "2.0.0",
   "description": "Focus Guard 2.0 - Adaptive Digital Wellbeing Assistant",
   "scripts": {
-    "dev": "python server.py 8000",
-    "build": "echo 'FocusGuard 2.0 Web Ready'",
-    "start": "python server.py 8000"
+    "build": "echo 'Focus Guard 2.0 Web Ready'",
+    "dev": "python ui/server.py 8000",
+    "start": "python ui/server.py 8000"
   },
   "keywords": [
     "focusguard",

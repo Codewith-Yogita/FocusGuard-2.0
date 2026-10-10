@@ -74,10 +74,444 @@ function selectCategory(catKey, el) {
   }
 }
 
+// ============================================================================
+// IN-BROWSER SIMULATION & CLOUD FALLBACK ENGINE
+// ============================================================================
+let isCloudOffline = false;
+let clientSession = {
+  status: "IDLE",
+  intent: {
+    category: "study",
+    goal_text: "Prepare for Data Structures exam",
+    duration_minutes: 25,
+    target_url: "https://youtube.com/watch?v=dsa_trees"
+  },
+  started_at: 0,
+  ends_at: 0,
+  duration_minutes: 25,
+  productive_seconds: 900,
+  distraction_seconds: 120,
+  interventions_count: 1,
+  current_risk_score: 6,
+  user_id: "Eshan",
+  is_simulated_mode: true
+};
+
+let clientCurrentActivity = {
+  app_name: "chrome.exe",
+  window_title: "Striver DSA Trees & Graphs Lecture - YouTube",
+  url: "https://youtube.com/watch?v=dsa_trees",
+  duration_seconds: 900,
+  source: "SIMULATOR_CLOUD"
+};
+
+let clientDrift = {
+  status: "NOMINAL",
+  trajectory: "ALIGNED",
+  duration_seconds: 900,
+  deviation_score: 0.05,
+  is_drift: false,
+  message: "High intent alignment. Focus state optimal.",
+  confidence: 0.98,
+  trajectory_summary: "Nominal divergence. Deep focus flow sustained."
+};
+
+let clientRisk = {
+  score: 6,
+  level: "LEVEL_0_NOMINAL",
+  breakdown: {
+    duration_points: 0,
+    mismatch_points: 0,
+    switching_points: 5,
+    repetition_points: 0,
+    recovery_credit: 1
+  },
+  factors: {
+    duration_risk: 0,
+    mismatch_risk: 0,
+    velocity_risk: 5,
+    repetition_risk: 0,
+    recovery_history_factor: 1
+  },
+  explanation: "Activity aligns with declared study goal. Nominal risk."
+};
+
+let clientRecommendation = {
+  tier_level: 0,
+  title: "Flow State Preserved",
+  message: "Active window matches declared focus goal.",
+  context_reason: "Productive learning activity detected."
+};
+
+let clientActivePrompt = null;
+let clientFreezePunishment = {
+  active: false,
+  is_active: false,
+  remaining_seconds: 0,
+  seconds_remaining: 0,
+  reason: "",
+  target_app: ""
+};
+
+let freezeCountdownTimer = null;
+
+function applyClientTelemetryToUI() {
+  const telemetryData = {
+    session: clientSession,
+    intent: clientSession.intent,
+    current_activity: clientCurrentActivity,
+    drift: clientDrift,
+    risk: clientRisk,
+    recommendation: clientRecommendation,
+    active_prompt: clientActivePrompt,
+    switches_last_5m: 2,
+    who_is_watching: {
+      user_id: currentActiveUser,
+      user_present: true,
+      is_guest: currentPresenceState === "GUEST_WATCHING",
+      status: currentPresenceState,
+      confidence: 0.95,
+      message: `User '${currentActiveUser}' verified watching screen.`
+    },
+    freeze_punishment: clientFreezePunishment
+  };
+
+  updateSessionUI(telemetryData.session, telemetryData.intent);
+  updateCurrentActivityUI(telemetryData.current_activity, telemetryData.drift);
+  updateRiskUI(telemetryData.risk, telemetryData.switches_last_5m);
+  updateInterventionPromptUI(telemetryData.recommendation, telemetryData.active_prompt);
+  updateDriftDiagnosticsUI(telemetryData.drift, telemetryData.risk);
+  updateTelemetrySourceBadge(telemetryData.session.is_simulated_mode, telemetryData.current_activity.source);
+  updateWhoIsWatchingUI(telemetryData.who_is_watching, telemetryData.session?.user_id);
+  updateFreezePunishmentUI(telemetryData.freeze_punishment);
+}
+
+function triggerFreezePunishmentLocally(appTarget, reason, duration) {
+  clientFreezePunishment = {
+    active: true,
+    is_active: true,
+    remaining_seconds: duration,
+    seconds_remaining: duration,
+    reason: reason,
+    target_app: appTarget
+  };
+  clearInterval(freezeCountdownTimer);
+  updateFreezePunishmentUI(clientFreezePunishment);
+
+  freezeCountdownTimer = setInterval(() => {
+    if (clientFreezePunishment.remaining_seconds > 0) {
+      clientFreezePunishment.remaining_seconds -= 1;
+      clientFreezePunishment.seconds_remaining = clientFreezePunishment.remaining_seconds;
+      updateFreezePunishmentUI(clientFreezePunishment);
+    } else {
+      clientFreezePunishment.active = false;
+      clientFreezePunishment.is_active = false;
+      clearInterval(freezeCountdownTimer);
+      updateFreezePunishmentUI(clientFreezePunishment);
+    }
+  }, 1000);
+}
+
+function applySimulatorStepLocally(stepNum) {
+  clientSession.status = "ACTIVE";
+  clientSession.is_simulated_mode = true;
+  if (!clientSession.started_at) {
+    clientSession.started_at = Math.floor(Date.now() / 1000);
+    clientSession.ends_at = clientSession.started_at + 1500;
+  }
+
+  if (stepNum === 1) {
+    clientCurrentActivity = {
+      app_name: "chrome.exe",
+      window_title: "Striver DSA Trees & Graphs Lecture - YouTube",
+      url: "https://youtube.com/watch?v=dsa_trees",
+      duration_seconds: 900,
+      source: "SIMULATOR_CLOUD"
+    };
+    clientDrift = {
+      status: "NOMINAL",
+      trajectory: "ALIGNED",
+      duration_seconds: 900,
+      deviation_score: 0.05,
+      is_drift: false,
+      message: "Study lecture closely matches declared intent.",
+      confidence: 0.98,
+      trajectory_summary: "Nominal divergence. Deep focus flow sustained."
+    };
+    clientRisk = {
+      score: 6,
+      level: "LEVEL_0_NOMINAL",
+      breakdown: { duration_points: 0, mismatch_points: 0, switching_points: 5, repetition_points: 0, recovery_credit: 1 },
+      explanation: "Behavior aligned with study goal. Nominal risk."
+    };
+    clientRecommendation = {
+      tier_level: 0,
+      title: "Flow State Preserved",
+      message: "User engaged in declared DSA Trees lecture.",
+      context_reason: "High topical alignment."
+    };
+    clientActivePrompt = null;
+    clientFreezePunishment.active = false;
+    clientFreezePunishment.is_active = false;
+  } else if (stepNum === 2) {
+    clientCurrentActivity = {
+      app_name: "code.exe",
+      window_title: "BinaryTree.cpp - LeetCode 102 - Visual Studio Code",
+      url: null,
+      duration_seconds: 600,
+      source: "SIMULATOR_CLOUD"
+    };
+    clientDrift = {
+      status: "NOMINAL",
+      trajectory: "ALIGNED",
+      duration_seconds: 600,
+      deviation_score: 0.08,
+      is_drift: false,
+      message: "Coding algorithm implementation in IDE.",
+      confidence: 0.97,
+      trajectory_summary: "Nominal drift. Active coding session."
+    };
+    clientRisk = {
+      score: 10,
+      level: "LEVEL_0_NOMINAL",
+      breakdown: { duration_points: 0, mismatch_points: 0, switching_points: 8, repetition_points: 0, recovery_credit: 2 },
+      explanation: "IDE coding active. Deep work mode."
+    };
+    clientRecommendation = {
+      tier_level: 0,
+      title: "Flow State Preserved",
+      message: "Coding in IDE matches study objectives.",
+      context_reason: "Productive coding activity."
+    };
+    clientActivePrompt = null;
+    clientFreezePunishment.active = false;
+    clientFreezePunishment.is_active = false;
+  } else if (stepNum === 3) {
+    clientCurrentActivity = {
+      app_name: "chrome.exe",
+      window_title: "Viral Memes #Shorts - YouTube",
+      url: "https://youtube.com/shorts/funny_cat_99",
+      duration_seconds: 150,
+      source: "SIMULATOR_CLOUD"
+    };
+    clientDrift = {
+      status: "MILD",
+      trajectory: "DIVERGENT",
+      duration_seconds: 150,
+      deviation_score: 0.42,
+      is_drift: true,
+      message: "Short-form entertainment diversion detected.",
+      confidence: 0.92,
+      trajectory_summary: "Mild trajectory divergence. Diversion onset."
+    };
+    clientRisk = {
+      score: 28,
+      level: "LEVEL_1_AWARENESS",
+      breakdown: { duration_points: 8, mismatch_points: 15, switching_points: 5, repetition_points: 0, recovery_credit: 0 },
+      explanation: "YouTube Shorts diversion started (150s). Awareness prompt advised."
+    };
+    clientRecommendation = {
+      tier_level: 1,
+      title: "Gentle Awareness Prompt",
+      message: "Brief diversion into YouTube Shorts detected.",
+      context_reason: "Non-blocking awareness notification."
+    };
+    clientActivePrompt = {
+      intervention_id: "int_demo_3",
+      tier_level: 1,
+      risk_score: 28,
+      headline: "Mindful Pause: Noticed YouTube Shorts",
+      rationale: "You declared 'Study DSA Trees'. Short-form video diverts attention from long-term memory consolidation.",
+      actions: [{ id: "DISMISS", label: "Got it, back to DSA", is_primary: true }]
+    };
+    clientFreezePunishment.active = false;
+    clientFreezePunishment.is_active = false;
+  } else if (stepNum === 4) {
+    clientCurrentActivity = {
+      app_name: "chrome.exe",
+      window_title: "Instagram Reels",
+      url: "https://instagram.com/reels/popular",
+      duration_seconds: 320,
+      source: "SIMULATOR_CLOUD"
+    };
+    clientDrift = {
+      status: "MODERATE",
+      trajectory: "PERSISTENT_DIVERGENT",
+      duration_seconds: 320,
+      deviation_score: 0.68,
+      is_drift: true,
+      message: "Social media video feed continuing past 5 minutes.",
+      confidence: 0.96,
+      trajectory_summary: "Moderate drift: Sustained social feed diversion."
+    };
+    clientRisk = {
+      score: 55,
+      level: "LEVEL_2_SUGGESTION",
+      breakdown: { duration_points: 18, mismatch_points: 25, switching_points: 8, repetition_points: 4, recovery_credit: 0 },
+      explanation: "Instagram Reels active for >5m during study session. Moderate risk."
+    };
+    clientRecommendation = {
+      tier_level: 2,
+      title: "Contextual Refocus Suggestion",
+      message: "Instagram Reels open for over 5 minutes.",
+      context_reason: "Actionable redirect recommended."
+    };
+    clientActivePrompt = {
+      intervention_id: "int_demo_4",
+      tier_level: 2,
+      risk_score: 55,
+      headline: "Mind Mirror: Instagram Reels Active",
+      rationale: "Dopamine loop detected. Your declared goal is 'Prepare for Data Structures exam'. Ready to switch back?",
+      actions: [
+        { id: "RETURN_TO_GOAL", label: "Return to Striver Lecture", is_primary: true, target_url: "https://youtube.com/watch?v=dsa_trees" },
+        { id: "DISMISS", label: "Dismiss (2 min)" }
+      ]
+    };
+    clientFreezePunishment.active = false;
+    clientFreezePunishment.is_active = false;
+  } else if (stepNum === 5) {
+    clientCurrentActivity = {
+      app_name: "chrome.exe",
+      window_title: "Reddit - r/funny",
+      url: "https://reddit.com/r/funny",
+      duration_seconds: 480,
+      source: "SIMULATOR_CLOUD"
+    };
+    clientDrift = {
+      status: "ACUTE",
+      trajectory: "CRITICAL_DIVERGENT",
+      duration_seconds: 480,
+      deviation_score: 0.88,
+      is_drift: true,
+      message: "Repeated non-productive diversion across multiple entertainment domains.",
+      confidence: 0.99,
+      trajectory_summary: "Acute attention drift. Repeated diversion loop."
+    };
+    clientRisk = {
+      score: 78,
+      level: "LEVEL_3_GUIDED_RESET",
+      breakdown: { duration_points: 26, mismatch_points: 28, switching_points: 12, repetition_points: 12, recovery_credit: 0 },
+      explanation: "Third distraction domain. Escalating to Guided Breath Reset."
+    };
+    clientRecommendation = {
+      tier_level: 3,
+      title: "Guided Micro-Reset",
+      message: "Attention fatigue detected. A 3-minute breath reset will restore prefrontal control.",
+      context_reason: "High cognitive drift recovery."
+    };
+    clientActivePrompt = {
+      intervention_id: "int_demo_5",
+      tier_level: 3,
+      risk_score: 78,
+      headline: "Attention Reset Required",
+      rationale: "Multiple distraction cycles detected. Research shows a 3-minute physiological sigh restores cognitive control.",
+      actions: [
+        { id: "BREATH_RESET", label: "Start 3-Minute Breath Reset", is_primary: true },
+        { id: "RETURN_TO_GOAL", label: "Return to DSA Trees", target_url: "https://youtube.com/watch?v=dsa_trees" }
+      ]
+    };
+    clientFreezePunishment.active = false;
+    clientFreezePunishment.is_active = false;
+  } else if (stepNum === 6) {
+    clientCurrentActivity = {
+      app_name: "chrome.exe",
+      window_title: "WhatsApp Web - Friends Group Chat",
+      url: "https://web.whatsapp.com",
+      duration_seconds: 240,
+      source: "SIMULATOR_CLOUD"
+    };
+    clientDrift = {
+      status: "MODERATE",
+      trajectory: "COMMUNICATION_DIVERSION",
+      duration_seconds: 240,
+      deviation_score: 0.60,
+      is_drift: true,
+      message: "Social messaging chat during study session.",
+      confidence: 0.94,
+      trajectory_summary: "Communication diversion. Context switching penalty."
+    };
+    clientRisk = {
+      score: 48,
+      level: "LEVEL_2_SUGGESTION",
+      breakdown: { duration_points: 14, mismatch_points: 20, switching_points: 10, repetition_points: 4, recovery_credit: 0 },
+      explanation: "Instant messaging diversion detected."
+    };
+    clientRecommendation = {
+      tier_level: 2,
+      title: "Chat Diversion Detected",
+      message: "Messaging chat active during focused study.",
+      context_reason: "Proactive reminder."
+    };
+    clientActivePrompt = {
+      intervention_id: "int_demo_6",
+      tier_level: 2,
+      risk_score: 48,
+      headline: "Social Messaging Alert",
+      rationale: "Context switching to messaging apps incurs a 23-minute re-focus penalty.",
+      actions: [
+        { id: "RETURN_TO_GOAL", label: "Return to Study", is_primary: true, target_url: "https://youtube.com/watch?v=dsa_trees" },
+        { id: "DISMISS", label: "Dismiss" }
+      ]
+    };
+    clientFreezePunishment.active = false;
+    clientFreezePunishment.is_active = false;
+  } else if (stepNum === 7) {
+    clientCurrentActivity = {
+      app_name: "chrome.exe",
+      window_title: "Instagram Reels & Shorts (Excess Distraction)",
+      url: "https://instagram.com/reels",
+      duration_seconds: 450,
+      source: "SIMULATOR_CLOUD"
+    };
+    clientDrift = {
+      status: "ACUTE",
+      trajectory: "EXCESS_DISTRACTION",
+      duration_seconds: 450,
+      deviation_score: 0.95,
+      is_drift: true,
+      message: "Excess distraction trigger: Instagram Reels & YouTube Shorts watched during study.",
+      confidence: 1.0,
+      trajectory_summary: "Excessive distraction policy breach. 1-Minute Tab Freeze enforced."
+    };
+    clientRisk = {
+      score: 92,
+      level: "LEVEL_4_ENFORCEMENT",
+      breakdown: { duration_points: 28, mismatch_points: 30, switching_points: 14, repetition_points: 20, recovery_credit: 0 },
+      explanation: "Excessive distraction policy breached. Tab freeze activated."
+    };
+    clientRecommendation = {
+      tier_level: 4,
+      title: "1-Minute Freeze Enforced",
+      message: "Tab freeze enforced for 60 seconds to break habitual distraction loops.",
+      context_reason: "Excessive distraction penalty."
+    };
+    clientActivePrompt = {
+      intervention_id: "int_demo_7",
+      tier_level: 4,
+      risk_score: 92,
+      headline: "Tab Freeze Active — 1 Minute Penalty",
+      rationale: "Excessive social scrolling during declared study session. Penalty active.",
+      actions: [{ id: "BREATH_RESET", label: "Use Freeze for Breath Reset", is_primary: true }]
+    };
+    triggerFreezePunishmentLocally("Instagram Reels & YouTube Shorts", "Excessive distraction detected (Instagram Reels / YouTube Shorts / Unnecessary texting). 1-Minute Tab Freeze Penalty enforced.", 60);
+  }
+}
+
 async function startFocusSession() {
   const goalText = document.getElementById("goalTextInput").value.trim() || "Focus Session";
   const duration = parseInt(document.getElementById("durationSelect").value, 10) || 25;
   const targetUrl = document.getElementById("targetUrlInput")?.value?.trim() || "";
+
+  clientSession.status = "ACTIVE";
+  clientSession.intent = {
+    category: selectedCategory,
+    goal_text: goalText,
+    duration_minutes: duration,
+    target_url: targetUrl
+  };
+  clientSession.started_at = Math.floor(Date.now() / 1000);
+  clientSession.ends_at = clientSession.started_at + (duration * 60);
+  clientSession.duration_minutes = duration;
 
   try {
     const res = await fetch("/api/v2/session/start", {
@@ -90,24 +524,29 @@ async function startFocusSession() {
         target_url: targetUrl
       })
     });
-    const data = await res.json();
-    if (data.success) {
-      pollLiveTelemetry();
+    if (res.ok) {
+      const data = await res.json();
+      if (data.session) clientSession = data.session;
     }
-  } catch (err) {
-    console.error("Failed to start focus session:", err);
-  }
+  } catch (err) {}
+  pollLiveTelemetry();
 }
 
 async function stopFocusSession() {
+  clientSession.status = "IDLE";
+  clientSession.ends_at = 0;
+  clientFreezePunishment.active = false;
+  clientFreezePunishment.is_active = false;
+  clearInterval(freezeCountdownTimer);
+
   try {
     await fetch("/api/v2/session/stop", { method: "POST" });
-    document.getElementById("activeFocusCard").style.display = "none";
-    document.getElementById("intentOnboardingCard").style.display = "block";
-    document.getElementById("interventionCardContainer").style.display = "none";
-  } catch (err) {
-    console.error("Failed to stop session:", err);
-  }
+  } catch (err) {}
+
+  document.getElementById("activeFocusCard").style.display = "none";
+  document.getElementById("intentOnboardingCard").style.display = "block";
+  document.getElementById("interventionCardContainer").style.display = "none";
+  pollLiveTelemetry();
 }
 
 // ============================================================================
@@ -117,21 +556,22 @@ async function stopFocusSession() {
 async function pollLiveTelemetry() {
   try {
     const res = await fetch("/api/v2/telemetry/live");
-    if (!res.ok) return;
-    const data = await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      updateSessionUI(data.session, data.intent);
+      updateCurrentActivityUI(data.current_activity, data.drift);
+      updateRiskUI(data.risk, data.switches_last_5m);
+      updateInterventionPromptUI(data.recommendation, data.active_prompt);
+      updateDriftDiagnosticsUI(data.drift, data.risk);
+      updateTelemetrySourceBadge(data.session.is_simulated_mode, data.current_activity.source);
+      updateWhoIsWatchingUI(data.who_is_watching, data.session?.user_id);
+      updateFreezePunishmentUI(data.freeze_punishment);
+      return;
+    }
+  } catch (err) {}
 
-    updateSessionUI(data.session, data.intent);
-    updateCurrentActivityUI(data.current_activity, data.drift);
-    updateRiskUI(data.risk, data.switches_last_5m);
-    updateInterventionPromptUI(data.recommendation, data.active_prompt);
-    updateDriftDiagnosticsUI(data.drift, data.risk);
-    updateTelemetrySourceBadge(data.session.is_simulated_mode, data.current_activity.source);
-    updateWhoIsWatchingUI(data.who_is_watching, data.session?.user_id);
-    updateFreezePunishmentUI(data.freeze_punishment);
-
-  } catch (err) {
-    console.warn("Telemetry poll error:", err);
-  }
+  // Fallback to in-browser client state machine
+  applyClientTelemetryToUI();
 }
 
 function updateSessionUI(session, intent) {
@@ -504,35 +944,33 @@ async function fetchInsights() {
 // ============================================================================
 
 async function triggerSimulatorStep(stepNum) {
+  // Visual button active highlight
+  document.querySelectorAll(".demo-step-btn").forEach((b, i) => {
+    if (i + 1 === stepNum) b.classList.add("active");
+    else b.classList.remove("active");
+  });
+
+  // Client-side fallback simulation
+  applySimulatorStepLocally(stepNum);
+
   try {
-    const res = await fetch("/api/v2/simulator/step", {
+    await fetch("/api/v2/simulator/step", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: jsonString({ step: stepNum })
     });
-    const data = await res.json();
+  } catch (err) {}
 
-    // Visual button active highlight
-    document.querySelectorAll(".demo-step-btn").forEach((b, i) => {
-      if (i + 1 === stepNum) b.classList.add("active");
-      else b.classList.remove("active");
-    });
-
-    // Immediate poll
-    pollLiveTelemetry();
-  } catch (err) {
-    console.error("Simulator step error:", err);
-  }
+  pollLiveTelemetry();
 }
 
 async function resetSimulator() {
+  document.querySelectorAll(".demo-step-btn").forEach(b => b.classList.remove("active"));
+  applySimulatorStepLocally(1);
   try {
     await fetch("/api/v2/simulator/reset", { method: "POST" });
-    document.querySelectorAll(".demo-step-btn").forEach(b => b.classList.remove("active"));
-    pollLiveTelemetry();
-  } catch (err) {
-    console.error("Simulator reset error:", err);
-  }
+  } catch (err) {}
+  pollLiveTelemetry();
 }
 
 /**

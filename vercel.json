@@ -1,14 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/ui/(.*)",
-      "destination": "/$1"
-    }
-  ]
+  "buildCommand": "echo 'Focus Guard 2.0 Web Ready'",
+  "outputDirectory": "."
 }

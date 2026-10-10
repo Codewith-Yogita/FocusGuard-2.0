@@ -1,0 +1,17 @@
+# Vercel Ignore File
+# Ignore backend Python scripts and environments so Vercel builds purely as a high-performance static web application
+pyproject.toml
+requirements.txt
+server.py
+app.py
+index.py
+main.py
+wsgi.py
+api/
+core/
+tools/
+extension/
+data/
+*.bat
+__pycache__/
+*.pyc

@@ -6,6 +6,7 @@ Routes API and serverless requests to FocusGuardRequestHandler & WSGI app.
 
 import os
 import sys
+from http.server import BaseHTTPRequestHandler
 
 # Add project root and tools to sys.path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -15,4 +16,12 @@ if ROOT_DIR not in sys.path:
 if os.path.join(ROOT_DIR, "tools") not in sys.path:
     sys.path.insert(0, os.path.join(ROOT_DIR, "tools"))
 
-from ui.server import app, application, handler, wsgi_app, FocusGuardRequestHandler
+from ui.server import wsgi_app, FocusGuardRequestHandler
+
+def app(environ, start_response):
+    return wsgi_app(environ, start_response)
+
+application = app
+
+class handler(FocusGuardRequestHandler):
+    pass

@@ -14,7 +14,14 @@ if ROOT_DIR not in sys.path:
 if os.path.join(ROOT_DIR, "tools") not in sys.path:
     sys.path.insert(0, os.path.join(ROOT_DIR, "tools"))
 
-from ui.server import app, application, handler, wsgi_app, FocusGuardRequestHandler, run_server, DEFAULT_PORT
+from ui.server import wsgi_app, FocusGuardRequestHandler, run_server, DEFAULT_PORT
+
+# Explicit top-level function definition and assignment for Vercel AST static scanner
+def app(environ, start_response):
+    return wsgi_app(environ, start_response)
+
+application = app
+handler = FocusGuardRequestHandler
 
 if __name__ == "__main__":
     port = DEFAULT_PORT

@@ -541,19 +541,26 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "profiles": profiles
             })
         # Extension Zip Download Endpoint (For Judges & Evaluators)
-        if path in ("/api/extension/download", "/api/v2/extension/download"):
-            import zipfile
-            ext_dir = os.path.join(PROJECT_DIR, "extension")
-            buf = io.BytesIO()
-            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                if os.path.exists(ext_dir):
-                    for root, _, files in os.walk(ext_dir):
-                        for file in files:
-                            full_path = os.path.join(root, file)
-                            rel_path = os.path.relpath(full_path, ext_dir)
-                            zf.write(full_path, rel_path)
-            buf.seek(0)
-            zip_bytes = buf.getvalue()
+        if path in ("/api/extension/download", "/api/v2/extension/download", "/focusguard-extension.zip"):
+            zip_path = os.path.join(PROJECT_DIR, "focusguard-extension.zip")
+            if not os.path.exists(zip_path):
+                zip_path = os.path.join(UI_DIR, "focusguard-extension.zip")
+            if os.path.exists(zip_path):
+                with open(zip_path, "rb") as f:
+                    zip_bytes = f.read()
+            else:
+                import zipfile
+                ext_dir = os.path.join(PROJECT_DIR, "extension")
+                buf = io.BytesIO()
+                with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                    if os.path.exists(ext_dir):
+                        for root, _, files in os.walk(ext_dir):
+                            for file in files:
+                                full_path = os.path.join(root, file)
+                                rel_path = os.path.relpath(full_path, ext_dir)
+                                zf.write(full_path, rel_path)
+                buf.seek(0)
+                zip_bytes = buf.getvalue()
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/zip')
@@ -1352,6 +1359,8 @@ def wsgi_app(environ, start_response):
                 content_type = 'image/svg+xml'
             elif file_path.endswith('.json'):
                 content_type = 'application/json'
+            elif file_path.endswith('.zip'):
+                content_type = 'application/zip'
 
             try:
                 with open(file_path, 'rb') as f:
@@ -1361,6 +1370,8 @@ def wsgi_app(environ, start_response):
                     ('Content-Length', str(len(content))),
                     ('Access-Control-Allow-Origin', '*')
                 ]
+                if file_path.endswith('.zip'):
+                    headers.append(('Content-Disposition', 'attachment; filename="focusguard-extension.zip"'))
                 start_response('200 OK', headers)
                 return [content]
             except Exception:

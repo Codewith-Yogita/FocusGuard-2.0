@@ -1276,6 +1276,56 @@ function dismissIdmInstallModal() {
   showToast("🟢 In-Browser Simulator active. You can reopen Extension Guard from the top header.");
 }
 
+async function handleZipDownload(e) {
+  if (e) e.preventDefault();
+  const btn = document.getElementById("btnDownloadExtensionZip");
+  const oldText = btn ? btn.innerHTML : "";
+  if (btn) btn.innerHTML = `<span>⏳ Downloading .zip...</span>`;
+
+  showToast("📥 Downloading FocusGuard Extension ZIP...");
+
+  const candidateUrls = [
+    "focusguard-extension.zip",
+    "/focusguard-extension.zip",
+    "/api/extension/download",
+    "https://raw.githubusercontent.com/Codewith-Yogita/FocusGuard-2.0/main/focusguard-extension.zip"
+  ];
+
+  for (const url of candidateUrls) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size > 500) {
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = "focusguard-extension.zip";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+          showToast("✓ focusguard-extension.zip downloaded successfully!");
+          if (btn) btn.innerHTML = `<span>✓ Downloaded!</span>`;
+          setTimeout(() => { if (btn) btn.innerHTML = oldText; }, 3000);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Download candidate failed:", url, err);
+    }
+  }
+
+  // Fallback direct link navigation
+  const fallbackA = document.createElement("a");
+  fallbackA.href = "focusguard-extension.zip";
+  fallbackA.download = "focusguard-extension.zip";
+  document.body.appendChild(fallbackA);
+  fallbackA.click();
+  document.body.removeChild(fallbackA);
+  if (btn) btn.innerHTML = oldText;
+}
+
 function toggleExtensionDropdown(e) {
   if (e) e.stopPropagation();
   const dd = document.getElementById("extensionMenuDropdown");

@@ -1,0 +1,27 @@
+{
+  "active": true,
+  "installed_on_disk": true,
+  "extension_id": "ocklplpfgpfjkiogladhfhnibgoakkfl",
+  "extension_path": "C:\\Users\\Eshan Sharma\\AppData\\Local\\FocusGuard\\extension",
+  "version": "2.0.0",
+  "manifest_version": 3,
+  "browsers": [
+    {
+      "name": "Microsoft Edge",
+      "path": "msedge.exe",
+      "reg_key": "Software\\Microsoft\\Edge\\Extensions"
+    },
+    {
+      "name": "Google Chrome",
+      "path": "chrome.exe",
+      "reg_key": "Software\\Google\\Chrome\\Extensions"
+    }
+  ],
+  "features": [
+    "in_page_banner",
+    "mind_mirror_modal",
+    "guided_breath_reset",
+    "tab_freeze_penalty",
+    "idm_auto_install"
+  ]
+}

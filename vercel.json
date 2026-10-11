@@ -4,7 +4,59 @@
   "cleanUrls": true,
   "buildCommand": "echo 'Focus Guard 2.0 Web Ready'",
   "outputDirectory": ".",
+  "headers": [
+    {
+      "source": "/(.*)\\.zip",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/zip"
+        },
+        {
+          "key": "Content-Disposition",
+          "value": "attachment; filename=\"focusguard-extension.zip\""
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/api/extension/download",
+      "destination": "/focusguard-extension.zip"
+    },
+    {
+      "source": "/api/v2/extension/download",
+      "destination": "/focusguard-extension.zip"
+    },
+    {
+      "source": "/api/extension/status",
+      "destination": "/extension-status.json"
+    },
+    {
+      "source": "/api/v2/extension/status",
+      "destination": "/extension-status.json"
+    },
+    {
+      "source": "/download",
+      "destination": "/focusguard-extension.zip"
+    },
     {
       "source": "/api/(.*)",
       "destination": "/api/index.py"

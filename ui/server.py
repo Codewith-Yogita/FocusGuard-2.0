@@ -83,7 +83,23 @@ def auto_register_extension_windows() -> Dict[str, Any]:
     """IDM-Style Windows Registry setup and launcher creation for Chrome, Edge, and Brave."""
     results = {"success": True, "registry_updated": [], "errors": []}
     browsers = detect_installed_browsers()
+
+    # Copy extension to clean standard ASCII AppData directory (like IDM does) to avoid Unicode/Korean path issues
+    local_app_data = os.path.expandvars("%LOCALAPPDATA%")
+    clean_dir = os.path.join(local_app_data, "FocusGuard", "extension")
     ext_abs_path = os.path.abspath(EXTENSION_DIR)
+    try:
+        os.makedirs(clean_dir, exist_ok=True)
+        import shutil
+        src_dir = os.path.abspath(EXTENSION_DIR)
+        for item in os.listdir(src_dir):
+            s = os.path.join(src_dir, item)
+            d = os.path.join(clean_dir, item)
+            if os.path.isfile(s):
+                shutil.copy2(s, d)
+        ext_abs_path = clean_dir
+    except Exception as e:
+        results["errors"].append(f"sync_appdata: {e}")
 
     # 1. Update Windows Registry under HKCU (no Admin needed)
     if sys.platform == "win32":
@@ -108,7 +124,20 @@ def auto_register_extension_windows() -> Dict[str, Any]:
         tools_dir = os.path.join(PROJECT_DIR, "tools")
         os.makedirs(tools_dir, exist_ok=True)
         bat_file = os.path.join(tools_dir, "launch_with_shield.bat")
-        primary_browser = browsers[0]["path"] if browsers else "chrome.exe"
+        primary_browser = browsers[0]["path"] if browsers else "msedge.exe"
+        try:
+            import subprocess
+            proc_out = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=3).stdout.lower()
+            if "msedge.exe" in proc_out:
+                edge_b = next((b for b in browsers if "edge" in b["name"].lower()), None)
+                if edge_b:
+                    primary_browser = edge_b["path"]
+            elif "chrome.exe" in proc_out:
+                chrome_b = next((b for b in browsers if "chrome" in b["name"].lower()), None)
+                if chrome_b:
+                    primary_browser = chrome_b["path"]
+        except Exception:
+            pass
         with open(bat_file, "w", encoding="utf-8") as f:
             f.write(f'@echo off\necho Launching browser with FocusGuard 2.0 Shield pre-loaded...\nstart "" "{primary_browser}" --load-extension="{ext_abs_path}" http://127.0.0.1:8000\n')
         results["launcher_script"] = bat_file
@@ -121,15 +150,43 @@ def auto_register_extension_windows() -> Dict[str, Any]:
     return results
 
 
-def launch_browser_with_extension(url: str = "http://127.0.0.1:8000") -> Dict[str, Any]:
-    """Launches the primary Chromium browser with the extension pre-loaded."""
+def launch_browser_with_extension(url: str = "http://127.0.0.1:8000", browser_pref: Optional[str] = None) -> Dict[str, Any]:
+    """Launches the primary Chromium browser (Edge/Chrome) with the extension pre-loaded."""
     browsers = detect_installed_browsers()
     if not browsers:
-        return {"success": False, "error": "No Chromium browser found on system"}
+        return {"success": False, "error": "No Chromium browser (Chrome or Edge) found on system"}
 
-    target = browsers[0]
+    target = None
+
+    # 1. Match explicit preference (from web app request)
+    if browser_pref:
+        pref_lower = browser_pref.lower()
+        for b in browsers:
+            if pref_lower in b["name"].lower():
+                target = b
+                break
+
+    # 2. Match currently running browser process
+    if not target and sys.platform == "win32":
+        try:
+            import subprocess
+            res = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=3)
+            proc_out = res.stdout.lower()
+            if "msedge.exe" in proc_out:
+                target = next((b for b in browsers if "edge" in b["name"].lower()), None)
+            elif "chrome.exe" in proc_out:
+                target = next((b for b in browsers if "chrome" in b["name"].lower()), None)
+        except Exception:
+            pass
+
+    # 3. Fallback to first installed browser
+    if not target:
+        target = browsers[0]
+
     import subprocess
-    ext_abs_path = os.path.abspath(EXTENSION_DIR)
+    local_app_data = os.path.expandvars("%LOCALAPPDATA%")
+    clean_dir = os.path.join(local_app_data, "FocusGuard", "extension")
+    ext_abs_path = clean_dir if os.path.isdir(clean_dir) else os.path.abspath(EXTENSION_DIR)
     cmd = [target["path"], f"--load-extension={ext_abs_path}", url]
     try:
         subprocess.Popen(cmd)
@@ -141,6 +198,7 @@ def launch_browser_with_extension(url: str = "http://127.0.0.1:8000") -> Dict[st
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
+
 
 
 # Active Focus Session State
@@ -763,7 +821,8 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
         # 0. Launch Browser with FocusGuard Extension Pre-Loaded
         if path in ("/api/extension/launch-browser", "/api/v2/extension/launch-browser"):
             target_url = payload.get("url", "http://127.0.0.1:8000")
-            launch_res = launch_browser_with_extension(target_url)
+            pref = payload.get("browser", None)
+            launch_res = launch_browser_with_extension(target_url, browser_pref=pref)
             return self._send_json(200, launch_res)
 
         # 1. Declare / Update Intent

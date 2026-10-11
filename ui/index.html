@@ -723,13 +723,13 @@
       <!-- Auto-Install Notification Message -->
       <div id="idmStatusBanner" style="background: rgba(14, 165, 233, 0.09); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; text-align: left;">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 16px;" id="idmStatusIcon">🔄</span>
+          <span style="font-size: 16px;" id="idmStatusIcon">🛡️</span>
           <strong id="idmStatusTitle" style="color: #38bdf8; font-size: 0.85rem;">
-            Auto-Configuring Browser Shield...
+            FocusGuard Browser Shield Setup
           </strong>
         </div>
         <p id="idmStatusDesc" style="font-size: 0.76rem; color: #cbd5e1; line-height: 1.45; margin: 4px 0 0 0;">
-          Just like IDM, FocusGuard integrates with your Windows registry and browser so distraction interventions attach automatically.
+          Integrates with Microsoft Edge &amp; Chrome. Auto-attach the extension via <b>run_focusguard.bat</b>, load unpacked in 15 seconds, or download the .zip package.
         </p>
       </div>
 
@@ -738,7 +738,7 @@
         <div class="idm-step-item done" id="idmStep1">
           <div class="idm-step-icon">✓</div>
           <div style="flex: 1;">
-            <div style="font-size: 0.8rem; font-weight: 700; color: #f8fafc;">Extension Files Ready</div>
+            <div style="font-size: 0.8rem; font-weight: 700; color: #f8fafc;">Extension Package Ready</div>
             <div style="font-size: 0.7rem; color: #94a3b8;" id="idmExtPathText">Verified in FocusGuard2.0/extension</div>
           </div>
           <span class="btn-chip" style="font-size: 0.65rem; padding: 2px 7px; color: #34d399; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1);">READY</span>
@@ -748,7 +748,7 @@
           <div class="idm-step-icon" id="idmStep2Icon">✓</div>
           <div style="flex: 1;">
             <div style="font-size: 0.8rem; font-weight: 700; color: #f8fafc;">Windows Registry Integration</div>
-            <div style="font-size: 0.7rem; color: #94a3b8;" id="idmRegistryText">Registered for Chrome & Edge (IDM Mode)</div>
+            <div style="font-size: 0.7rem; color: #94a3b8;" id="idmRegistryText">Registered for Edge &amp; Chrome (IDM Mode)</div>
           </div>
           <span class="btn-chip" id="idmRegistryBadge" style="font-size: 0.65rem; padding: 2px 7px; color: #34d399; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1);">CONFIGURED</span>
         </div>
@@ -772,6 +772,13 @@
         <button id="btnIdmCopyPath" class="idm-btn-secondary" onclick="copyExtensionPathAndOpenSettings()">
           <span>📂 1-Click Load Unpacked (Path Auto-Copied)</span>
         </button>
+
+        <div id="idmInstructionsBox" style="display: none; background: rgba(15, 23, 42, 0.75); border: 1px dashed rgba(56, 189, 248, 0.4); border-radius: 10px; padding: 10px 12px; font-size: 0.73rem; color: #e2e8f0; text-align: left; line-height: 1.5;">
+          <div style="font-weight: 700; color: #38bdf8; margin-bottom: 4px;">🚀 3-Step Setup (Takes 15s):</div>
+          <div>1. Open <b id="extUrlGuide">edge://extensions</b> in a new tab</div>
+          <div>2. Turn <b style="color: #34d399;">Developer Mode ON</b> (top or left toggle)</div>
+          <div>3. Click <b>Load unpacked</b> &amp; paste the copied path!</div>
+        </div>
 
         <div style="display: flex; gap: 8px; margin-top: 4px;">
           <a href="focusguard-extension.zip" download="focusguard-extension.zip" id="btnDownloadExtensionZip" class="idm-btn-secondary" onclick="handleZipDownload(event)" style="flex: 1; text-decoration: none; padding: 8px 12px; font-size: 0.78rem;">

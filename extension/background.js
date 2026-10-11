@@ -78,3 +78,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   sendResponse({ received: true });
   return false;
 });
+
+// External message listener (direct communication from FocusGuard Web Dashboard)
+if (chrome.runtime.onMessageExternal) {
+  chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+    if (message && (message.type === "PING" || message.action === "PING" || message.type === "FOCUSGUARD_PING_EXTENSION")) {
+      sendResponse({
+        installed: true,
+        version: "2.0.0",
+        id: chrome.runtime.id,
+        name: "FocusGuard Tab Distraction Shield",
+        active: true,
+        timestamp: Date.now()
+      });
+      return false;
+    }
+    sendResponse({ success: true, message: "FocusGuard background active" });
+    return false;
+  });
+}
+

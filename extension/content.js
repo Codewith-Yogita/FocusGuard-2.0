@@ -9,15 +9,51 @@
  */
 
 (function () {
-  // Never inject HUD or blocker into FocusGuard dashboard or local servers
+  // Detect FocusGuard dashboard or local servers
   const host = window.location.hostname;
-  if (
+  const isDashboard = (
     host === "localhost" ||
     host === "127.0.0.1" ||
     host === "0.0.0.0" ||
     host.includes("vercel.app") ||
     host.includes("focusguard")
-  ) {
+  );
+
+  if (isDashboard) {
+    try {
+      // Signal extension installation directly to the web dashboard
+      document.documentElement.setAttribute("data-focusguard-extension-installed", "true");
+      document.documentElement.setAttribute("data-focusguard-extension-version", "2.0.0");
+      window.__FOCUSGUARD_EXTENSION_INSTALLED__ = true;
+      window.__FOCUSGUARD_EXTENSION_VERSION__ = "2.0.0";
+
+      // Dispatch custom event for dashboard listeners
+      window.dispatchEvent(new CustomEvent("focusguard:extension-ready", {
+        detail: {
+          installed: true,
+          version: "2.0.0",
+          id: "ocklplpfgpfjkiogladhfhnibgoakkfl",
+          features: ["in_page_banner", "mind_mirror", "breath_reset", "freeze_punishment"]
+        }
+      }));
+
+      // Listen for ping messages from the webpage
+      window.addEventListener("message", (evt) => {
+        if (evt.data && (evt.data.type === "FOCUSGUARD_PING_EXTENSION" || evt.data.action === "PING")) {
+          window.postMessage({
+            type: "FOCUSGUARD_PONG_EXTENSION",
+            installed: true,
+            version: "2.0.0",
+            id: "ocklplpfgpfjkiogladhfhnibgoakkfl",
+            timestamp: Date.now()
+          }, "*");
+        }
+      });
+      console.log("[FocusGuard Extension] Active & Bridge Connected to Web Control Plane.");
+    } catch (e) {
+      console.warn("[FocusGuard Extension] Dashboard bridge notice:", e);
+    }
+    // Return early to never inject distraction warning overlays or blocker into the dashboard itself
     return;
   }
 

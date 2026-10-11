@@ -33,8 +33,44 @@ if %errorlevel% neq 0 (
 )
 
 :found_python
+echo Registering FocusGuard Browser Shield (IDM-style integration)...
+%PYTHON_CMD% -c "import sys, os; sys.path.insert(0, os.getcwd()); from ui.server import auto_register_extension_windows; auto_register_extension_windows()" >nul 2>&1
+
 echo Starting Focus Guard 2.0 Core REST Server on http://127.0.0.1:8000 ...
-start "" http://127.0.0.1:8000
+
+set EXT_DIR=%~dp0extension
+set LAUNCHED_BROWSER=0
+
+if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" (
+    echo [Browser] Auto-loading FocusGuard extension in Google Chrome...
+    start "" "%ProgramFiles%\Google\Chrome\Application\chrome.exe" --load-extension="%EXT_DIR%" http://127.0.0.1:8000
+    set LAUNCHED_BROWSER=1
+    goto :browser_started
+)
+if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" (
+    echo [Browser] Auto-loading FocusGuard extension in Google Chrome...
+    start "" "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" --load-extension="%EXT_DIR%" http://127.0.0.1:8000
+    set LAUNCHED_BROWSER=1
+    goto :browser_started
+)
+if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" (
+    echo [Browser] Auto-loading FocusGuard extension in Microsoft Edge...
+    start "" "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" --load-extension="%EXT_DIR%" http://127.0.0.1:8000
+    set LAUNCHED_BROWSER=1
+    goto :browser_started
+)
+if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" (
+    echo [Browser] Auto-loading FocusGuard extension in Microsoft Edge...
+    start "" "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" --load-extension="%EXT_DIR%" http://127.0.0.1:8000
+    set LAUNCHED_BROWSER=1
+    goto :browser_started
+)
+
+:browser_started
+if %LAUNCHED_BROWSER% equ 0 (
+    start "" http://127.0.0.1:8000
+)
 
 %PYTHON_CMD% ui/server.py 8000
 pause
+

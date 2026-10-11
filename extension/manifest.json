@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "FocusGuard - Tab Distraction Shield",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "In-page DOM warning HUD, video pause, and tab-level distraction blocker for FocusGuard.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1ONG2YXMN0NWwDtLNXtWdRMk4zLRl9Gudcu6tvTAj/qZxUrf0+eDSnlnkffZH1WovKVAKZ6b4F1VUBgJUBE6VguDwjeRmVcJaKkAEQ15Xz2uGcTAXv8We7qXNdV6hefc2KSa2mBbqtas1nHFRPvpI9mSUOY0wZDt0OlsA+IeJkhQa4shmSBCqI8vOxuacyBWu8rHyM168UpqeFCYwvjjL4j+n1zMyyhknmIlMCFsbYLhD32Jjrnkim1dV+AdkndfRf00S5BkaFvzxjuc2zQxzmibAR/a9jPMWTFbJt/CdQgq128widFMv9xbsWRmbLPMNGHdNgtG+p2VGdw6//cp6wIDAQAB",
   "permissions": [
     "storage",
     "tabs"
@@ -10,6 +11,13 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "externally_connectable": {
+    "matches": [
+      "*://127.0.0.1/*",
+      "*://localhost/*",
+      "*://*.vercel.app/*"
+    ]
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -18,11 +26,6 @@
       "matches": [
         "http://*/*",
         "https://*/*"
-      ],
-      "exclude_matches": [
-        "*://localhost/*",
-        "*://127.0.0.1/*",
-        "*://*.vercel.app/*"
       ],
       "js": ["content.js"],
       "run_at": "document_end"

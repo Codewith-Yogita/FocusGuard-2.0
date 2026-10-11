@@ -49,6 +49,100 @@ except Exception as e:
     face_auth_engine = None
     HAS_FACE_AUTH = False
 
+# =============================================================================
+# BROWSER EXTENSION & IDM-STYLE AUTO-INSTALL ENGINE
+# =============================================================================
+EXTENSION_ID = "ocklplpfgpfjkiogladhfhnibgoakkfl"
+EXTENSION_DIR = os.path.join(PROJECT_DIR, "extension")
+
+
+def detect_installed_browsers() -> List[Dict[str, str]]:
+    browsers = []
+    candidates = [
+        ("Google Chrome", os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"), r"Software\Google\Chrome\Extensions"),
+        ("Google Chrome (x86)", os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"), r"Software\Google\Chrome\Extensions"),
+        ("Google Chrome (User)", os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"), r"Software\Google\Chrome\Extensions"),
+        ("Microsoft Edge", os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"), r"Software\Microsoft\Edge\Extensions"),
+        ("Microsoft Edge (x64)", os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"), r"Software\Microsoft\Edge\Extensions"),
+        ("Brave Browser", os.path.expandvars(r"%ProgramFiles%\BraveSoftware\Brave-Browser\Application\brave.exe"), r"Software\BraveSoftware\Brave-Browser\Extensions"),
+        ("Brave Browser (User)", os.path.expandvars(r"%LocalAppData%\BraveSoftware\Brave-Browser\Application\brave.exe"), r"Software\BraveSoftware\Brave-Browser\Extensions"),
+    ]
+    seen = set()
+    for name, path, reg_sub in candidates:
+        if os.path.isfile(path) and path.lower() not in seen:
+            seen.add(path.lower())
+            browsers.append({
+                "name": name,
+                "path": path,
+                "reg_key": reg_sub
+            })
+    return browsers
+
+
+def auto_register_extension_windows() -> Dict[str, Any]:
+    """IDM-Style Windows Registry setup and launcher creation for Chrome, Edge, and Brave."""
+    results = {"success": True, "registry_updated": [], "errors": []}
+    browsers = detect_installed_browsers()
+    ext_abs_path = os.path.abspath(EXTENSION_DIR)
+
+    # 1. Update Windows Registry under HKCU (no Admin needed)
+    if sys.platform == "win32":
+        try:
+            import winreg
+            for b in browsers:
+                reg_path = f"{b['reg_key']}\\{EXTENSION_ID}"
+                try:
+                    key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_path)
+                    winreg.SetValueEx(key, "path", 0, winreg.REG_SZ, ext_abs_path)
+                    winreg.SetValueEx(key, "version", 0, winreg.REG_SZ, "2.0.0")
+                    winreg.SetValueEx(key, "update_url", 0, winreg.REG_SZ, "https://clients2.google.com/service/update2/crx")
+                    winreg.CloseKey(key)
+                    results["registry_updated"].append(reg_path)
+                except Exception as ex:
+                    results["errors"].append(f"{reg_path}: {ex}")
+        except Exception as e:
+            results["errors"].append(str(e))
+
+    # 2. Write dedicated 1-click batch launcher
+    try:
+        tools_dir = os.path.join(PROJECT_DIR, "tools")
+        os.makedirs(tools_dir, exist_ok=True)
+        bat_file = os.path.join(tools_dir, "launch_with_shield.bat")
+        primary_browser = browsers[0]["path"] if browsers else "chrome.exe"
+        with open(bat_file, "w", encoding="utf-8") as f:
+            f.write(f'@echo off\necho Launching browser with FocusGuard 2.0 Shield pre-loaded...\nstart "" "{primary_browser}" --load-extension="{ext_abs_path}" http://127.0.0.1:8000\n')
+        results["launcher_script"] = bat_file
+    except Exception as e:
+        results["errors"].append(f"bat: {e}")
+
+    results["extension_id"] = EXTENSION_ID
+    results["extension_path"] = ext_abs_path
+    results["browsers"] = browsers
+    return results
+
+
+def launch_browser_with_extension(url: str = "http://127.0.0.1:8000") -> Dict[str, Any]:
+    """Launches the primary Chromium browser with the extension pre-loaded."""
+    browsers = detect_installed_browsers()
+    if not browsers:
+        return {"success": False, "error": "No Chromium browser found on system"}
+
+    target = browsers[0]
+    import subprocess
+    ext_abs_path = os.path.abspath(EXTENSION_DIR)
+    cmd = [target["path"], f"--load-extension={ext_abs_path}", url]
+    try:
+        subprocess.Popen(cmd)
+        return {
+            "success": True,
+            "browser": target["name"],
+            "command": " ".join(cmd),
+            "message": f"Launched {target['name']} with FocusGuard Shield pre-loaded."
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # Active Focus Session State
 SESSION_FILE = os.path.join(PROJECT_DIR, "data", "active_session.json")
 session_lock = threading.Lock()
@@ -470,20 +564,45 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(zip_bytes)
             return
 
-        # Extension Status Endpoint
+        # Extension Status Endpoint (Rich Windows & IDM Telemetry)
         if path in ("/api/extension/status", "/api/v2/extension/status"):
+            browsers = detect_installed_browsers()
             return self._send_json(200, {
                 "active": True,
-                "simulated": True,
+                "installed_on_disk": os.path.isdir(EXTENSION_DIR),
+                "extension_id": EXTENSION_ID,
+                "extension_path": os.path.abspath(EXTENSION_DIR),
                 "version": "2.0.0",
                 "manifest_version": 3,
+                "browsers": browsers,
                 "features": [
                     "in_page_banner",
                     "mind_mirror_modal",
                     "guided_breath_reset",
-                    "tab_freeze_penalty"
+                    "tab_freeze_penalty",
+                    "idm_auto_install"
                 ]
             })
+
+        # Extension 1-Click Launcher Script Download
+        if path in ("/api/extension/launcher-script", "/api/v2/extension/launcher-script"):
+            tools_dir = os.path.join(PROJECT_DIR, "tools")
+            launcher_bat = os.path.join(tools_dir, "launch_with_shield.bat")
+            if not os.path.exists(launcher_bat):
+                auto_register_extension_windows()
+            bat_content = b'@echo off\r\necho FocusGuard Launcher\r\n'
+            if os.path.exists(launcher_bat):
+                with open(launcher_bat, "rb") as f:
+                    bat_content = f.read()
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/x-bat')
+            self.send_header('Content-Disposition', 'attachment; filename="FocusGuard_Browser_Shield.bat"')
+            self.send_header('Content-Length', str(len(bat_content)))
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(bat_content)
+            return
 
         # 6. Legacy compatibility: Consolidated System Status
         if path == "/api/status":
@@ -628,6 +747,17 @@ class FocusGuardRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+
+        # 0. IDM-Style Extension Auto-Installer & System Registration
+        if path in ("/api/extension/auto-install", "/api/v2/extension/auto-install"):
+            reg_res = auto_register_extension_windows()
+            return self._send_json(200, reg_res)
+
+        # 0. Launch Browser with FocusGuard Extension Pre-Loaded
+        if path in ("/api/extension/launch-browser", "/api/v2/extension/launch-browser"):
+            target_url = payload.get("url", "http://127.0.0.1:8000")
+            launch_res = launch_browser_with_extension(target_url)
+            return self._send_json(200, launch_res)
 
         # 1. Declare / Update Intent
         if path == "/api/v2/intent":

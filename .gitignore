@@ -12,6 +12,7 @@ data/active_session.json
 scratch/
 tools/models/
 tools/face_template.enc
+tools/launch_with_shield.bat
 
 # OS / Editor
 .DS_Store

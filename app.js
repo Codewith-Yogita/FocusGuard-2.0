@@ -1068,7 +1068,213 @@ function toggleDemoDropdown(e) {
 // EXTENSION GUARD & IN-BROWSER SIMULATOR FOR JUDGES
 // ============================================================================
 
+// ============================================================================
+// EXTENSION GUARD & IDM-STYLE AUTO-INSTALL ENGINE
+// ============================================================================
+
 let isExtensionSimActive = localStorage.getItem("fg_extension_sim") !== "false";
+let isRealExtensionInstalled = false;
+let cachedExtensionPath = "";
+let cachedExtensionId = "ocklplpfgpfjkiogladhfhnibgoakkfl";
+let isAutoInstallRunning = false;
+
+// Listen for direct bridge messages & custom events from the extension
+window.addEventListener("focusguard:extension-ready", (e) => {
+  console.log("[FocusGuard Web] Extension ready event received:", e.detail);
+  onExtensionConnected(e.detail?.version || "2.0.0");
+});
+
+window.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "FOCUSGUARD_PONG_EXTENSION") {
+    console.log("[FocusGuard Web] Extension PONG received:", e.data);
+    onExtensionConnected(e.data.version || "2.0.0");
+  }
+});
+
+function onExtensionConnected(version) {
+  isRealExtensionInstalled = true;
+  updateExtensionUIState();
+
+  const modal = document.getElementById("extInstallModal");
+  const bannerTitle = document.getElementById("idmStatusTitle");
+  const bannerDesc = document.getElementById("idmStatusDesc");
+  const badge = document.getElementById("idmModalBadge");
+  const step3 = document.getElementById("idmStep3");
+  const step3Icon = document.getElementById("idmStep3Icon");
+  const step3Badge = document.getElementById("idmStep3Badge");
+  const step3Title = document.getElementById("idmStep3Title");
+  const step3Desc = document.getElementById("idmStep3Desc");
+
+  if (bannerTitle) {
+    bannerTitle.textContent = "🎉 Extension Connected & Shield Active!";
+    bannerTitle.style.color = "#34d399";
+  }
+  if (bannerDesc) {
+    bannerDesc.textContent = `FocusGuard Tab Shield v${version} is now actively guarding your focus in this browser.`;
+  }
+  if (badge) {
+    badge.className = "idm-badge connected";
+    badge.textContent = "✓ CONNECTED";
+  }
+  if (step3) {
+    step3.className = "idm-step-item done";
+  }
+  if (step3Icon) step3Icon.textContent = "✓";
+  if (step3Badge) {
+    step3Badge.textContent = "CONNECTED";
+    step3Badge.style.color = "#34d399";
+    step3Badge.style.borderColor = "rgba(16,185,129,0.3)";
+    step3Badge.style.background = "rgba(16,185,129,0.1)";
+  }
+  if (step3Title) step3Title.textContent = "Browser Shield Active";
+  if (step3Desc) step3Desc.textContent = "In-page DOM interventions & tab freeze active";
+
+  showToast(`🛡️ FocusGuard Extension v${version} Active & Connected!`);
+
+  // If auto-installer modal is visible, close it gracefully after short celebration
+  if (modal && modal.style.display === "flex") {
+    setTimeout(() => {
+      closeExtensionInstallModal();
+    }, 1800);
+  }
+}
+
+async function checkAndAutoInstallExtension() {
+  // 1. Check if extension marked the DOM already
+  const domMark = document.documentElement.getAttribute("data-focusguard-extension-installed");
+  if (domMark === "true" || window.__FOCUSGUARD_EXTENSION_INSTALLED__) {
+    onExtensionConnected("2.0.0");
+    return;
+  }
+
+  // 2. Ping content script via postMessage
+  window.postMessage({ type: "FOCUSGUARD_PING_EXTENSION" }, "*");
+
+  // 3. Ping external extension if chrome.runtime is available
+  if (window.chrome && chrome.runtime && typeof chrome.runtime.sendMessage === "function") {
+    try {
+      chrome.runtime.sendMessage(cachedExtensionId, { type: "PING" }, (res) => {
+        if (!chrome.runtime.lastError && res && res.installed) {
+          onExtensionConnected(res.version || "2.0.0");
+        }
+      });
+    } catch (e) {}
+  }
+
+  // 4. Give extension 900ms to answer
+  setTimeout(async () => {
+    if (isRealExtensionInstalled) return;
+
+    const currentMark = document.documentElement.getAttribute("data-focusguard-extension-installed");
+    if (currentMark === "true" || window.__FOCUSGUARD_EXTENSION_INSTALLED__) {
+      onExtensionConnected("2.0.0");
+      return;
+    }
+
+    console.log("[FocusGuard Web] Extension not detected. Starting IDM auto-installation flow...");
+    await runIdmAutoInstall(true);
+  }, 900);
+}
+
+async function runIdmAutoInstall(showModalOnFirstRun = false) {
+  if (isAutoInstallRunning) return;
+  isAutoInstallRunning = true;
+
+  try {
+    // Call backend auto-install endpoint (registers in Windows Registry for Chrome & Edge)
+    const res = await fetch("/api/extension/auto-install", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (data.extension_path) {
+      cachedExtensionPath = data.extension_path;
+      const pathEl = document.getElementById("idmExtPathText");
+      if (pathEl) pathEl.textContent = data.extension_path;
+    }
+
+    if (data.browsers && data.browsers.length > 0) {
+      const bNames = data.browsers.map(b => b.name).join(", ");
+      const regEl = document.getElementById("idmRegistryText");
+      if (regEl) regEl.textContent = `Registered for ${bNames} (IDM Mode)`;
+    }
+
+    updateExtensionUIState();
+
+    // Show modal if extension is not yet installed and not explicitly dismissed in this session
+    const wasDismissed = sessionStorage.getItem("fg_idm_modal_dismissed");
+    if (showModalOnFirstRun && !wasDismissed && !isRealExtensionInstalled) {
+      openExtensionInstallModal();
+    }
+  } catch (err) {
+    console.warn("[FocusGuard Web] Auto-install backend check:", err);
+  } finally {
+    isAutoInstallRunning = false;
+  }
+}
+
+async function relaunchBrowserWithExtension() {
+  const btn = document.getElementById("btnIdmRelaunch");
+  if (btn) {
+    btn.innerHTML = `<span>⏳ Launching Browser with Shield...</span>`;
+    btn.style.opacity = "0.8";
+  }
+
+  try {
+    const res = await fetch("/api/extension/launch-browser", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: window.location.href })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (data.success) {
+      showToast(`⚡ ${data.message || "Browser launched with FocusGuard Tab Shield pre-loaded!"}`);
+      if (btn) {
+        btn.innerHTML = `<span>✓ Launched in ${data.browser || "Browser"}</span>`;
+        btn.style.background = "linear-gradient(135deg, #10b981, #059669)";
+      }
+    } else {
+      showToast(`⚠️ Could not auto-launch browser directly: ${data.error || "Please load unpacked"}`);
+      copyExtensionPathAndOpenSettings();
+    }
+  } catch (e) {
+    showToast("⚠️ Could not contact backend. Please use 'Load Unpacked' option.");
+    copyExtensionPathAndOpenSettings();
+  }
+}
+
+async function copyExtensionPathAndOpenSettings() {
+  const path = cachedExtensionPath || "FocusGuard2.0\\extension";
+  try {
+    await navigator.clipboard.writeText(path);
+    showToast(`📋 Copied extension path to clipboard!`);
+  } catch (e) {
+    const input = document.createElement("input");
+    input.value = path;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand("copy");
+    document.body.removeChild(input);
+    showToast(`📋 Copied extension path to clipboard!`);
+  }
+
+  const step3Title = document.getElementById("idmStep3Title");
+  const step3Desc = document.getElementById("idmStep3Desc");
+  if (step3Title) step3Title.textContent = "Path Copied! Paste in Chrome / Edge";
+  if (step3Desc) step3Desc.textContent = "Open chrome://extensions -> Developer Mode ON -> Load Unpacked -> Paste";
+
+  const isEdge = navigator.userAgent.includes("Edg");
+  const extUrl = isEdge ? "edge://extensions" : "chrome://extensions";
+  showToast(`💡 Open ${extUrl} in a new tab, turn Developer mode ON, and click "Load unpacked"!`);
+}
+
+function dismissIdmInstallModal() {
+  sessionStorage.setItem("fg_idm_modal_dismissed", "true");
+  closeExtensionInstallModal();
+  showToast("🟢 In-Browser Simulator active. You can reopen Extension Guard from the top header.");
+}
 
 function toggleExtensionDropdown(e) {
   if (e) e.stopPropagation();
@@ -1084,13 +1290,26 @@ function updateExtensionUIState() {
   const toggleBtn = document.getElementById("btnToggleExtensionSim");
   const text = document.getElementById("extensionMenuBtnText");
 
-  if (isExtensionSimActive) {
-    if (dot) { dot.className = "extension-status-dot active"; }
+  if (isRealExtensionInstalled) {
+    if (dot) {
+      dot.className = "extension-status-dot active";
+      dot.style.background = "#10b981";
+      dot.style.boxShadow = "0 0 10px #10b981";
+    }
     if (badge) {
-      badge.textContent = "GUARD ACTIVE";
+      badge.textContent = "SHIELD CONNECTED";
       badge.style.color = "#34d399";
       badge.style.borderColor = "rgba(16,185,129,0.3)";
       badge.style.background = "rgba(16,185,129,0.1)";
+    }
+    if (text) text.textContent = "Shield Connected";
+  } else if (isExtensionSimActive) {
+    if (dot) { dot.className = "extension-status-dot active"; }
+    if (badge) {
+      badge.textContent = "GUARD ACTIVE (SIM)";
+      badge.style.color = "#38bdf8";
+      badge.style.borderColor = "rgba(56,189,248,0.3)";
+      badge.style.background = "rgba(56,189,248,0.1)";
     }
     if (toggleBtn) {
       toggleBtn.textContent = "🟢 ON (Simulated)";
@@ -1102,7 +1321,7 @@ function updateExtensionUIState() {
   } else {
     if (dot) { dot.className = "extension-status-dot inactive"; }
     if (badge) {
-      badge.textContent = "SIMULATOR OFF";
+      badge.textContent = "SHIELD OFF";
       badge.style.color = "#94a3b8";
       badge.style.borderColor = "rgba(148,163,184,0.3)";
       badge.style.background = "rgba(148,163,184,0.1)";
@@ -1212,7 +1431,10 @@ function showExtensionOverlayPreview(tier) {
 
 function openExtensionInstallModal() {
   const modal = document.getElementById("extInstallModal");
-  if (modal) modal.style.display = "flex";
+  if (modal) {
+    modal.style.display = "flex";
+    runIdmAutoInstall(false);
+  }
 }
 
 function closeExtensionInstallModal() {
@@ -2151,6 +2373,7 @@ function jsonString(obj) {
 // Initialize on DOM load
 document.addEventListener("DOMContentLoaded", () => {
   updateExtensionUIState();
+  checkAndAutoInstallExtension();
   pollLiveTelemetry();
   pollTimer = setInterval(pollLiveTelemetry, 1500);
 });

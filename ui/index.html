@@ -697,47 +697,90 @@
     </div>
   </div>
 
-  <!-- Extension Installation & Download Guide Modal -->
-  <div id="extInstallModal" class="face-scanner-overlay" style="display: none;">
-    <div class="face-scanner-card" style="max-width: 520px; text-align: left;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 26px;">🧩</span>
+  <!-- Extension Auto-Installer & IDM-Style Integration Modal -->
+  <div id="extInstallModal" class="idm-install-overlay" style="display: none;">
+    <div class="idm-install-card">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 10px; text-align: left;">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #0284c7, #6366f1); display: grid; place-items: center; font-size: 22px; box-shadow: 0 4px 16px rgba(2, 132, 199, 0.4);">
+            🧩
+          </div>
           <div>
-            <div style="font-weight: 700; font-size: 1rem; color: #fff;">FocusGuard Chrome Extension</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted);">Manifest V3 • Real-Time Tab Protection</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: 800; font-size: 1.05rem; color: #fff;">FocusGuard Tab Shield</span>
+              <span class="idm-badge" id="idmModalBadge">⚡ IDM AUTO-INSTALL</span>
+            </div>
+            <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">
+              Chrome & Edge Integration • Manifest V3
+            </div>
           </div>
         </div>
-        <button class="btn-chip" onclick="closeExtensionInstallModal()" style="padding: 0.35rem 0.8rem; font-weight: 700; color: #e2e8f0; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2);">
-          ✕ Close
+        <button class="btn-chip" onclick="closeExtensionInstallModal()" style="padding: 0.35rem 0.75rem; font-weight: 700; color: #94a3b8; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12);" title="Close modal">
+          ✕
         </button>
       </div>
 
-      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;">
-        <strong style="color: #34d399; font-size: 0.82rem; display: block; margin-bottom: 3px;">✨ Good news for Judges & Evaluators:</strong>
-        <p style="font-size: 0.76rem; color: #cbd5e1; line-height: 1.45; margin: 0;">
-          The dashboard already includes an <strong>In-Browser Extension Simulator</strong> that runs 100% of the in-page banners, Mind Mirror cards, and freeze penalties without needing any installation!
+      <!-- Auto-Install Notification Message -->
+      <div id="idmStatusBanner" style="background: rgba(14, 165, 233, 0.09); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; text-align: left;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;" id="idmStatusIcon">🔄</span>
+          <strong id="idmStatusTitle" style="color: #38bdf8; font-size: 0.85rem;">
+            Auto-Configuring Browser Shield...
+          </strong>
+        </div>
+        <p id="idmStatusDesc" style="font-size: 0.76rem; color: #cbd5e1; line-height: 1.45; margin: 4px 0 0 0;">
+          Just like IDM, FocusGuard integrates with your Windows registry and browser so distraction interventions attach automatically.
         </p>
       </div>
 
-      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
-        <div style="font-weight: 700; font-size: 0.82rem; color: #f8fafc; margin-bottom: 10px;">
-          3-Step Installation (Chrome / Edge / Brave):
+      <!-- Live 3-Stage Stepper -->
+      <div class="idm-step-list">
+        <div class="idm-step-item done" id="idmStep1">
+          <div class="idm-step-icon">✓</div>
+          <div style="flex: 1;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: #f8fafc;">Extension Files Ready</div>
+            <div style="font-size: 0.7rem; color: #94a3b8;" id="idmExtPathText">Verified in FocusGuard2.0/extension</div>
+          </div>
+          <span class="btn-chip" style="font-size: 0.65rem; padding: 2px 7px; color: #34d399; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1);">READY</span>
         </div>
-        <ol style="font-size: 0.78rem; color: #cbd5e1; line-height: 1.7; padding-left: 20px; margin: 0;">
-          <li>Open <code>chrome://extensions</code> (or <code>edge://extensions</code>) in your browser.</li>
-          <li>Toggle ON <strong>Developer mode</strong> in the top-right corner.</li>
-          <li>Click <strong>Load unpacked</strong> and select the <code>FocusGuard2.0/extension</code> directory!</li>
-        </ol>
+
+        <div class="idm-step-item done" id="idmStep2">
+          <div class="idm-step-icon" id="idmStep2Icon">✓</div>
+          <div style="flex: 1;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: #f8fafc;">Windows Registry Integration</div>
+            <div style="font-size: 0.7rem; color: #94a3b8;" id="idmRegistryText">Registered for Chrome & Edge (IDM Mode)</div>
+          </div>
+          <span class="btn-chip" id="idmRegistryBadge" style="font-size: 0.65rem; padding: 2px 7px; color: #34d399; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1);">CONFIGURED</span>
+        </div>
+
+        <div class="idm-step-item active" id="idmStep3">
+          <div class="idm-step-icon" id="idmStep3Icon">⚡</div>
+          <div style="flex: 1;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: #f8fafc;" id="idmStep3Title">Load Shield in Browser</div>
+            <div style="font-size: 0.7rem; color: #94a3b8;" id="idmStep3Desc">Click below to auto-relaunch or load unpacked</div>
+          </div>
+          <span class="btn-chip" id="idmStep3Badge" style="font-size: 0.65rem; padding: 2px 7px; color: #38bdf8; border-color: rgba(56,189,248,0.3); background: rgba(56,189,248,0.1);">ACTION READY</span>
+        </div>
       </div>
 
-      <div style="display: flex; gap: 8px;">
-        <a href="/api/extension/download" download="focusguard-extension.zip" class="btn-action primary" style="flex: 1; justify-content: center; padding: 10px; font-weight: 700; text-decoration: none; font-size: 0.85rem; background: linear-gradient(135deg, #10b981, #059669);">
-          <span>📥 Download Extension (.zip)</span>
-        </a>
-        <button class="btn-action" style="flex: 1; justify-content: center; padding: 10px; font-size: 0.85rem;" onclick="closeExtensionInstallModal()">
-          <span>Got it!</span>
+      <!-- Action Buttons -->
+      <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 16px;">
+        <button id="btnIdmRelaunch" class="idm-btn-primary" onclick="relaunchBrowserWithExtension()">
+          <span>⚡ 1-Click Relaunch with Shield</span>
         </button>
+
+        <button id="btnIdmCopyPath" class="idm-btn-secondary" onclick="copyExtensionPathAndOpenSettings()">
+          <span>📂 1-Click Load Unpacked (Path Auto-Copied)</span>
+        </button>
+
+        <div style="display: flex; gap: 8px; margin-top: 4px;">
+          <a href="/api/extension/download" download="focusguard-extension.zip" class="idm-btn-secondary" style="flex: 1; text-decoration: none; padding: 8px 12px; font-size: 0.78rem;">
+            <span>📥 Download .zip</span>
+          </a>
+          <button class="idm-btn-secondary" style="flex: 1; padding: 8px 12px; font-size: 0.78rem;" onclick="dismissIdmInstallModal()">
+            <span>🟢 Use In-Browser Simulator</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
